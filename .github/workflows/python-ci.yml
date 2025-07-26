@@ -1,0 +1,47 @@
+name: Python CI
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python-version: [3.10]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-cov mypy
+      - name: Run mypy (型チェック)
+        run: |
+          mypy modules/ > mypy.log || true
+      - name: Run tests with coverage
+        run: |
+          pytest --cov=modules --cov-report=term --cov-report=xml > pytest.log || true
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-xml
+          path: coverage.xml
+      - name: Upload pytest log
+        uses: actions/upload-artifact@v4
+        with:
+          name: pytest-log
+          path: pytest.log
+      - name: Upload mypy log
+        uses: actions/upload-artifact@v4
+        with:
+          name: mypy-log
+          path: mypy.log 

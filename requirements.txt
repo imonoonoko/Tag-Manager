@@ -1,0 +1,5 @@
+ttkbootstrap
+deep-translator
+pytest
+black
+ruff
