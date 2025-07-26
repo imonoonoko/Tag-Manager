@@ -1,43 +1,43 @@
+"""
+定数定義（後方互換性のため残す）
+新しい実装では各機能別モジュールを使用してください
+"""
 import json
 import os
-import re
-from typing import Any, Dict, Optional, List
+from typing import Any, Dict, Optional, List, Tuple
 
-POSITIVE_PROMPT_FILE = os.path.join('resources', 'config', "translated_tags.json") 
-NEGATIVE_PROMPT_FILE = os.path.join('resources', 'config', "negative_tags.json")
+# 基本設定（config.pyからインポート）
+from .config import (
+    POSITIVE_PROMPT_FILE, NEGATIVE_PROMPT_FILE, DB_FILE, THEME_FILE,
+    TRANSLATING_PLACEHOLDER, CATEGORY_KEYWORDS_FILE
+)
 
-DB_FILE = os.path.join('resources', "tags.db")
-THEME_FILE = "theme_settings.json" # theme_settings.jsonはルートに置く想定
-TRANSLATING_PLACEHOLDER = "(翻訳中...)"
+# カテゴリ管理機能（category_manager.pyからインポート）
+from .category_manager import (
+    load_category_keywords, CATEGORY_PRIORITIES, KEYWORD_WEIGHTS,
+    calculate_keyword_score, get_category_priority, get_all_categories,
+    is_valid_category, get_category_keywords, add_category_keyword, remove_category_keyword
+)
 
-# カテゴリキーワードを外部ファイルから読み込む
-CATEGORY_KEYWORDS_FILE = os.path.join(os.path.dirname(__file__), '..', 'resources', 'config', 'categories.json')
+# コンテキスト分析機能（context_analyzer.pyからインポート）
+from .context_analyzer import (
+    SYNONYM_MAPPING, CONTEXT_BOOST_RULES, NEGATION_WORDS, MODIFIER_WORDS,
+    analyze_tag_context, calculate_context_boost, get_synonyms,
+    has_negation, has_modifier, extract_color_keywords, extract_style_keywords,
+    get_context_rules_for_category
+)
 
-def load_category_keywords() -> Dict[str, List[str]]:
-    if os.path.exists(CATEGORY_KEYWORDS_FILE):
-        try:
-            with open(CATEGORY_KEYWORDS_FILE, 'r', encoding='utf-8') as f:
-                return json.load(f)
-        except Exception as e:
-            print(f"カテゴリキーワードファイルの読み込みに失敗しました: {e}")
-    # デフォルトのキーワード（優先順位を考慮して並べ替え）
-    return {
-        "服装・ファッション": ["dress", "skirt", "jacket", "coat", "hat", "beret", "bow", "ribbon", "gloves", "scarf", "shoes", "boots", "socks", "stockings", "hoodie"],
-        "髪型・ヘアスタイル": ["long hair", "short hair", "ponytail", "braid", "bangs", "curly", "straight", "wavy", "hairpin", "hairband"],
-        "小物・アクセサリー": ["bag", "glasses", "necklace", "ring", "earrings", "bracelet", "watch", "belt", "hat", "mask"],
-        "表情・感情": ["smile", "laugh", "cry", "angry", "sad", "happy", "surprised", "neutral", "serious", "blush"],
-        "ポーズ・アクション": ["sitting", "standing", "running", "jumping", "pose", "walking", "lying", "crouching", "kneeling", "dance"],
-        "人物・キャラクター": ["girl", "boy", "character", "solo", "model", "portrait", "face", "expression", "eyes", "mouth"],
-        "色彩・照明": ["bright", "dark", "colorful", "neon", "glowing", "glow", "shadow", "lightning", "sunlight", "vibrant",
-                     "pastel", "monochrome", "warm", "cool", "saturated", "desaturated", "muted", "hue", "contrast", "gradient",
-                     "soft light", "backlight", "rim light", "ambient light", "diffuse light"],
-        "特殊効果・フィルター": ["sparkles", "fog", "vignette", "bokeh", "motion blur", "grain", "noise", "lens flare", "glitch"],
-        "アートスタイル・技法": ["digital art", "watercolor", "pixel art", "anime style", "oil painting", "3d render", "photorealistic", "sketch"],
-        "背景・環境": ["background", "city", "forest", "night", "sky", "mountain", "beach", "blur", "bokeh", "sunset", "rain", "snow"]
-    }
+# AI予測機能（ai_predictor.pyからインポート）
+from .ai_predictor import (
+    predict_category_ai, suggest_similar_tags_ai, ai_predictor
+)
 
-category_keywords = load_category_keywords()
+# ユーザーカスタマイズ機能（customization.pyからインポート）
+from .customization import (
+    get_customized_category_keywords, apply_custom_rules, customization_manager
+)
 
+# 後方互換性のための関数
 def safe_load_json(filepath: str) -> Optional[Any]:
     """
     ファイルパスからJSONを安全に読み込む純粋関数。失敗時はNoneを返す。
@@ -48,35 +48,200 @@ def safe_load_json(filepath: str) -> Optional[Any]:
     except Exception:
         return None
 
+from .common_words import COMMON_WORDS
+
+def auto_assign_category_context_aware_pure(
+    tag: Optional[str],
+    category_keywords: Optional[Dict[str, List[str]]],
+    category_priorities: Optional[Dict[str, int]] = None,
+    all_tags: Optional[List[str]] = None
+) -> Tuple[str, Dict[str, Any]]:
+    """
+    コンテキスト認識機能付きのカテゴリ自動割り当て機能（後方互換性）
+    """
+    if not isinstance(tag, str) or not tag:
+        return "未分類", {"reason": "タグが空または無効", "score": 0}
+    
+    if category_priorities is None:
+        category_priorities = CATEGORY_PRIORITIES
+    
+    if all_tags is None:
+        all_tags = []
+    
+    tag_norm = tag.lower().strip()
+    
+    # 一般的すぎる単語は未分類として扱う
+    if tag_norm in COMMON_WORDS:
+        return "未分類", {"reason": "一般的すぎる単語のため", "score": 0}
+    
+    best_category = "未分類"
+    best_score = 0
+    best_reason = "マッチするキーワードが見つかりませんでした"
+    category_scores = {}
+    
+    # コンテキスト分析
+    context_info = analyze_tag_context(tag)
+    
+    try:
+        for category, keywords in (category_keywords or {}).items():
+            category_score = 0
+            matched_keywords = []
+            
+            for keyword in (keywords or []):
+                if not keyword:
+                    continue
+                
+                score = calculate_keyword_score(tag_norm, keyword)
+                if score > 0:
+                    category_score += score
+                    matched_keywords.append((keyword, score))
+            
+            # 複数キーワードマッチングのボーナス
+            if len(matched_keywords) > 1:
+                category_score += len(matched_keywords) * 10
+            
+            # カテゴリ優先度を考慮
+            priority = category_priorities.get(category, 999)
+            priority_bonus = max(0, (999 - priority) * 2)
+            category_score += priority_bonus
+            
+            # コンテキストブーストを適用
+            context_boost = calculate_context_boost(tag, category, all_tags)
+            category_score += context_boost
+            
+            # 否定語の場合はスコアを下げる
+            if context_info["has_negation"]:
+                category_score = max(0, category_score - 30)
+            
+            # 修飾語の場合はスコアを少し上げる
+            if context_info["has_modifier"]:
+                category_score += 10
+            
+            category_scores[category] = {
+                "score": category_score,
+                "matched_keywords": matched_keywords,
+                "priority": priority,
+                "priority_bonus": priority_bonus,
+                "context_boost": context_boost,
+                "context_info": context_info
+            }
+            
+            if category_score > best_score:
+                best_score = category_score
+                best_category = category
+                best_reason = f"キーワード: {', '.join([kw for kw, _ in matched_keywords])}"
+                if context_boost > 0:
+                    best_reason += f" (コンテキストブースト: +{context_boost})"
+        
+        # スコアが低すぎる場合は未分類
+        if best_score < 20:
+            best_category = "未分類"
+            best_reason = f"スコアが低すぎます（{best_score}）"
+        
+        return best_category, {
+            "reason": best_reason,
+            "score": best_score,
+            "category_scores": category_scores,
+            "assigned_category": best_category,
+            "context_analysis": context_info
+        }
+        
+    except Exception as e:
+        return "未分類", {"reason": f"エラーが発生しました: {str(e)}", "score": 0}
+
+def auto_assign_category_advanced_pure(
+    tag: Optional[str],
+    category_keywords: Optional[Dict[str, List[str]]],
+    category_priorities: Optional[Dict[str, int]] = None
+) -> Tuple[str, Dict[str, Any]]:
+    """
+    より洗練されたカテゴリ自動割り当て機能（後方互換性）
+    """
+    if not isinstance(tag, str) or not tag:
+        return "未分類", {"reason": "タグが空または無効", "score": 0}
+    
+    if category_priorities is None:
+        category_priorities = CATEGORY_PRIORITIES
+    
+    tag_norm = tag.lower().strip()
+    
+    # 一般的すぎる単語は未分類として扱う
+    if tag_norm in COMMON_WORDS:
+        return "未分類", {"reason": "一般的すぎる単語のため", "score": 0}
+    
+    best_category = "未分類"
+    best_score = 0
+    best_reason = "マッチするキーワードが見つかりませんでした"
+    category_scores = {}
+    
+    try:
+        for category, keywords in (category_keywords or {}).items():
+            category_score = 0
+            matched_keywords = []
+            
+            for keyword in (keywords or []):
+                if not keyword:
+                    continue
+                
+                score = calculate_keyword_score(tag_norm, keyword)
+                if score > 0:
+                    category_score += score
+                    matched_keywords.append((keyword, score))
+            
+            # 複数キーワードマッチングのボーナス
+            if len(matched_keywords) > 1:
+                category_score += len(matched_keywords) * 10
+            
+            # カテゴリ優先度を考慮
+            priority = category_priorities.get(category, 999)
+            priority_bonus = max(0, (999 - priority) * 2)
+            category_score += priority_bonus
+            
+            category_scores[category] = {
+                "score": category_score,
+                "matched_keywords": matched_keywords,
+                "priority": priority,
+                "priority_bonus": priority_bonus
+            }
+            
+            if category_score > best_score:
+                best_score = category_score
+                best_category = category
+                best_reason = f"キーワード: {', '.join([kw for kw, _ in matched_keywords])}"
+        
+        # スコアが低すぎる場合は未分類
+        if best_score < 20:
+            best_category = "未分類"
+            best_reason = f"スコアが低すぎます（{best_score}）"
+        
+        return best_category, {
+            "reason": best_reason,
+            "score": best_score,
+            "category_scores": category_scores,
+            "assigned_category": best_category
+        }
+        
+    except Exception as e:
+        return "未分類", {"reason": f"エラーが発生しました: {str(e)}", "score": 0}
+
 def auto_assign_category_pure(
     tag: Optional[str],
     category_keywords: Optional[Dict[str, List[str]]],
     category_priorities: Optional[Dict[str, int]] = None
 ) -> str:
     """
-    カテゴリキーワード・優先度辞書を引数で受け取る純粋関数。
+    カテゴリキーワード・優先度辞書を引数で受け取る純粋関数（後方互換性）
     """
-    if not isinstance(tag, str) or not tag:
-        return "未分類"
-    tag_norm = tag.lower().strip()
-    best_category = ""
-    best_priority = 999
-    if category_priorities is None:
-        category_priorities = {}
-    try:
-        for category, keywords in (category_keywords or {}).items():
-            for kw in (keywords or []):
-                if kw and kw.lower() in tag_norm:
-                    priority = category_priorities.get(category, 999)
-                    if priority < best_priority:
-                        best_category = category
-                        best_priority = priority
-    except Exception:
-        pass
-    if not best_category:
-        return "未分類"
-    return best_category
+    category, _ = auto_assign_category_advanced_pure(tag, category_keywords, category_priorities)
+    return category
 
 # 既存互換用エイリアス
 def auto_assign_category(tag: str) -> str:
-    return auto_assign_category_pure(tag, category_keywords, globals().get('category_priorities', {}))
+    """
+    既存互換用エイリアス（後方互換性）
+    """
+    category_keywords = load_category_keywords()
+    return auto_assign_category_pure(tag, category_keywords, CATEGORY_PRIORITIES)
+
+# グローバル変数（後方互換性）
+category_keywords = load_category_keywords()

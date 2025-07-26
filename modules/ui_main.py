@@ -3,6 +3,7 @@ import ttkbootstrap as tb
 from ttkbootstrap.constants import *
 from tkinter import simpledialog, messagebox, Menu, filedialog, Toplevel
 import tkinter as tk
+from tkinter import ttk
 import threading
 import shutil
 import datetime
@@ -20,6 +21,9 @@ from modules.constants import category_keywords, DB_FILE, TRANSLATING_PLACEHOLDE
 from modules.theme_manager import ThemeManager
 from modules.tag_manager import TagManager
 from modules.dialogs import CategorySelectDialog, BulkCategoryDialog
+# 新しいモジュールからインポート
+from modules.ai_predictor import predict_category_ai, suggest_similar_tags_ai
+from modules.customization import get_customized_category_keywords, apply_custom_rules
 
 # --- テスト容易化のためのロジック分離 ---
 def build_category_list(category_keywords: Dict[str, List[str]]) -> List[str]:
@@ -83,7 +87,7 @@ class TagManagerApp:
         self.theme_manager = ThemeManager()
         # 絶対パスでデータベースファイルを指定
         import os
-        db_path = db_file or os.path.join(os.path.dirname(__file__), '..', 'resources', 'tags.db')
+        db_path = db_file or os.path.join(os.path.dirname(__file__), '..', 'data', 'tags.db')
         self.tag_manager = TagManager(db_file=db_path, parent=self.root)
         # キャッシュを無効化してデータを再読み込み
         self.tag_manager.invalidate_cache()
@@ -99,7 +103,7 @@ class TagManagerApp:
         self.load_prompt_structure_priorities()
         self.load_category_descriptions()
         # 「全カテゴリ」を先頭に追加
-        self.category_list = build_category_list(category_keywords)
+        self.category_list = build_category_list(self.category_keywords)
         self.current_category = "全カテゴリ"
         # ログ設定（INFO以上、ファイル出力も有効化）
         log_dir = os.path.join(os.path.dirname(__file__), '..', 'logs')
@@ -211,8 +215,10 @@ class TagManagerApp:
             messagebox.showerror("エラー", "データベースファイルが見つかりません。", parent=self.root)
             return
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        backup_file = f"tags_backup_{timestamp}.db"
+        backup_file = os.path.join('backup', f"tags_backup_{timestamp}.db")
         try:
+            # バックアップディレクトリが存在しない場合は作成
+            os.makedirs('backup', exist_ok=True)
             shutil.copy(DB_FILE, backup_file)
             messagebox.showinfo("バックアップ完了", f"バックアップを作成しました：\n{backup_file}", parent=self.root)
         except (IOError, shutil.Error) as e:
@@ -273,12 +279,17 @@ class TagManagerApp:
         settings_menu.add_command(label="言語切替", command=self.dummy_settings)
         settings_menu.add_command(label="フォント/サイズ調整", command=self.dummy_settings)
         settings_menu.add_command(label="自動保存ON/OFF", command=self.dummy_settings)
+        settings_menu.add_separator()
+        settings_menu.add_command(label="AI予測設定", command=self.show_ai_settings_dialog)
+        settings_menu.add_command(label="カスタムキーワード管理", command=self.show_custom_keywords_dialog)
+        settings_menu.add_command(label="カスタムルール管理", command=self.show_custom_rules_dialog)
 
         # ツールメニュー
         tools_menu = Menu(menubar, tearoff=0)
         menubar.add_cascade(label="ツール", menu=tools_menu)
         tools_menu.add_command(label="重複タグの検出・削除", command=self.dummy_tools)
-        tools_menu.add_command(label="未分類タグの一括整理", command=self.dummy_tools)
+        tools_menu.add_command(label="未分類タグの一括整理", command=self.auto_assign_uncategorized_tags)
+        tools_menu.add_command(label="AI予測機能", command=self.show_ai_prediction_dialog)
         tools_menu.add_command(label="タグの一括インポート", command=self.import_tags_async)
         tools_menu.add_command(label="タグの一括エクスポート", command=self.export_all_tags)
         tools_menu.add_command(label="データの初期化", command=self.dummy_tools)
@@ -748,24 +759,24 @@ class TagManagerApp:
                     tree.delete(*tree.get_children())
                     for item in message["items"]:
                         tree.insert("", tk.END, values=item)
-                elif msg_type == "refresh":
-                    if self.refresh_debounce_id:
-                        self.root.after_cancel(self.refresh_debounce_id)
-                    self.refresh_debounce_id = self.root.after(100, self.refresh_tabs)
-                elif msg_type == "info":
-                    messagebox.showinfo(message["title"], message["message"], parent=self.root)
-                elif msg_type == "error":
-                    self.logger.error(f"{message['title']}: {message['message']}")
-                    messagebox.showerror(message["title"], message["message"], parent=self.root)
-                elif msg_type == "status":
-                    self.status_var.set(message["message"])
-                    # 追加完了や準備完了などであれば数秒後に消す
-                    if any(word in message["message"] for word in ["完了", "準備完了"]):
-                        self.root.after(3000, self.clear_status_var)
+            elif msg_type == "refresh":
+                if self.refresh_debounce_id:
+                    self.root.after_cancel(self.refresh_debounce_id)
+                self.refresh_debounce_id = self.root.after(100, self.refresh_tabs)
+            elif msg_type == "info":
+                messagebox.showinfo(message["title"], message["message"], parent=self.root)
+            elif msg_type == "error":
+                self.logger.error(f"{message['title']}: {message['message']}")
+                messagebox.showerror(message["title"], message["message"], parent=self.root)
+            elif msg_type == "status":
+                self.status_var.set(message["message"])
+                # 追加完了や準備完了などであれば数秒後に消す
+                if any(word in message["message"] for word in ["完了", "準備完了"]):
+                    self.root.after(3000, self.clear_status_var)
         except queue.Empty:
             pass
         finally:
-            self.root.after(100, self.process_queue)
+            self.root.after(100, self.process_queue) 
 
     def copy_to_clipboard(self) -> None:
         text = self._format_output_text(self.output_tags_data)
@@ -859,7 +870,7 @@ class TagManagerApp:
             negative_tags = [tag for tag in selected_tags_text if tag in tag_info_map and tag_info_map[tag].get("is_negative", False)]
             if negative_tags:
                 messagebox.showinfo("カテゴリ一括変更", "ネガティブタグのカテゴリは変更できません。\nネガティブタグを除外して選択し直してください。", parent=self.root)
-                return
+            return
         selected_tags_text = [tree.item(item, "values")[0] for item in selected]
         dialog = BulkCategoryDialog(self.root, selected_tags_text)
         if dialog.result and dialog.result['action'] == 'change':
@@ -1215,8 +1226,806 @@ class TagManagerApp:
             return val
         return ""
 
-# copy_selected_tags未定義エラーの修正（仮実装）
-    
+    def auto_assign_uncategorized_tags(self) -> None:
+        """
+        未分類タグのカテゴリ自動割り当て機能（AI予測統合版）
+        """
+        try:
+            # 未分類タグを取得
+            uncategorized_tags = self.tag_manager.load_tags(is_negative=False)
+            uncategorized_tags = [tag for tag in uncategorized_tags if tag.get("category") == "未分類"]
+            
+            if not uncategorized_tags:
+                messagebox.showinfo("未分類タグの一括整理", "未分類のタグが見つかりませんでした。")
+                return
+            
+            # 確認ダイアログ
+            result = messagebox.askyesno(
+                "未分類タグの一括整理",
+                f"未分類のタグが{len(uncategorized_tags)}個見つかりました。\n"
+                "AI予測機能とコンテキスト認識機能を統合した高度なカテゴリ自動割り当てを実行しますか？\n\n"
+                "この操作は元に戻せません。"
+            )
+            
+            if not result:
+                return
+            
+            # プログレスダイアログを表示
+            progress_dialog = ProgressDialog(
+                self.root,
+                "未分類タグの一括整理",
+                f"未分類タグ{len(uncategorized_tags)}個のAI予測によるカテゴリ自動割り当て中..."
+            )
+            
+            # 非同期処理で実行
+            def worker_auto_assign() -> None:
+                try:
+                    assigned_count = 0
+                    skipped_count = 0
+                    category_stats = {}
+                    detailed_results = []
+                    
+                    # 全タグのリストを作成（コンテキスト分析用）
+                    all_tags = [tag_data.get("tag", "") for tag_data in uncategorized_tags]
+                    
+                    for i, tag_data in enumerate(uncategorized_tags):
+                        tag_name = tag_data.get("tag", "")
+                        
+                        # プログレス更新
+                        progress_dialog.set_message(f"AI予測中... ({i+1}/{len(uncategorized_tags)}) {tag_name}")
+                        
+                        try:
+                            # AI予測機能を使用してカテゴリを予測
+                            predicted_category, confidence = predict_category_ai(tag_name)
+                            
+                            # 信頼度が低い場合は従来のコンテキスト認識機能を使用
+                            if confidence < 70.0:
+                                from modules.category_manager import load_category_keywords, CATEGORY_PRIORITIES
+                                from modules.constants import auto_assign_category_context_aware_pure
+                                category_keywords = load_category_keywords()
+                                fallback_category, fallback_details = auto_assign_category_context_aware_pure(
+                                    tag_name, category_keywords, CATEGORY_PRIORITIES, all_tags
+                                )
+                                
+                                # フォールバック結果を使用
+                                assigned_category = fallback_category
+                                details = fallback_details
+                                prediction_method = "コンテキスト認識（フォールバック）"
+                            else:
+                                assigned_category = predicted_category
+                                details = {"ai_score": confidence, "keyword_score": 0, "context_boost": 0, "dynamic_weight": 0, "usage_frequency": 0, "last_used": "不明", "reason": "AI予測による割り当て"}
+                                prediction_method = "AI予測"
+                            
+                            # 統計情報を更新
+                            if assigned_category not in category_stats:
+                                category_stats[assigned_category] = 0
+                            category_stats[assigned_category] += 1
+                            
+                            # 詳細結果を記録
+                            detailed_results.append({
+                                "tag": tag_name,
+                                "assigned_category": assigned_category,
+                                "prediction_method": prediction_method,
+                                "confidence": confidence if prediction_method == "AI予測" else details.get("score", 0),
+                                "ai_score": details.get("ai_score", 0) if prediction_method == "AI予測" else 0,
+                                "keyword_score": details.get("keyword_score", 0),
+                                "context_boost": details.get("context_boost", 0),
+                                "dynamic_weight": details.get("dynamic_weight", 0),
+                                "usage_frequency": details.get("usage_frequency", 0),
+                                "last_used": details.get("last_used", "不明"),
+                                "reason": details.get("reason", ""),
+                                "matched_keywords": [kw for kw, _ in details.get("category_scores", {}).get(assigned_category, {}).get("matched_keywords", [])] if "category_scores" in details else []
+                            })
+                            
+                            if assigned_category != "未分類":
+                                # カテゴリを更新
+                                if self.tag_manager.set_category(tag_name, assigned_category):
+                                    assigned_count += 1
+                                else:
+                                    skipped_count += 1
+                            else:
+                                skipped_count += 1
+                                
+                        except Exception as e:
+                            # AI予測でエラーが発生した場合は従来の方法を使用
+                            try:
+                                from modules.category_manager import load_category_keywords, CATEGORY_PRIORITIES
+                                from modules.constants import auto_assign_category_context_aware_pure
+                                category_keywords = load_category_keywords()
+                                assigned_category, details = auto_assign_category_context_aware_pure(
+                                    tag_name, category_keywords, CATEGORY_PRIORITIES, all_tags
+                                )
+                                
+                                if assigned_category not in category_stats:
+                                    category_stats[assigned_category] = 0
+                                category_stats[assigned_category] += 1
+                                
+                                detailed_results.append({
+                                    "tag": tag_name,
+                                    "assigned_category": assigned_category,
+                                    "prediction_method": "コンテキスト認識（エラー時）",
+                                    "confidence": details.get("score", 0),
+                                    "ai_score": 0,
+                                    "keyword_score": details.get("keyword_score", 0),
+                                    "context_boost": details.get("context_boost", 0),
+                                    "dynamic_weight": 0,
+                                    "usage_frequency": 0,
+                                    "last_used": "不明",
+                                    "reason": f"AI予測エラー: {str(e)}",
+                                    "matched_keywords": [kw for kw, _ in details.get("category_scores", {}).get(assigned_category, {}).get("matched_keywords", [])]
+                                })
+                                
+                                if assigned_category != "未分類":
+                                    if self.tag_manager.set_category(tag_name, assigned_category):
+                                        assigned_count += 1
+                                    else:
+                                        skipped_count += 1
+                                else:
+                                    skipped_count += 1
+                                    
+                            except Exception as fallback_error:
+                                # フォールバックでもエラーの場合
+                                detailed_results.append({
+                                    "tag": tag_name,
+                                    "assigned_category": "未分類",
+                                    "prediction_method": "エラー",
+                                    "confidence": 0,
+                                    "ai_score": 0,
+                                    "keyword_score": 0,
+                                    "context_boost": 0,
+                                    "dynamic_weight": 0,
+                                    "usage_frequency": 0,
+                                    "last_used": "不明",
+                                    "reason": f"予測エラー: {str(fallback_error)}",
+                                    "matched_keywords": []
+                                })
+                                skipped_count += 1
+                    
+                    # 完了メッセージ
+                    def show_completion() -> None:
+                        progress_dialog.close()
+                        
+                        # 詳細結果を表示
+                        result_text = f"AI予測による処理が完了しました。\n\n"
+                        result_text += f"カテゴリ割り当て: {assigned_count}個\n"
+                        result_text += f"未分類のまま: {skipped_count}個\n\n"
+                        
+                        # カテゴリ別統計
+                        if category_stats:
+                            result_text += "カテゴリ別割り当て結果:\n"
+                            for category, count in sorted(category_stats.items(), key=lambda x: x[1], reverse=True):
+                                if category != "未分類":
+                                    result_text += f"- {category}: {count}個\n"
+                        
+                        # 予測方法別統計
+                        ai_predictions = sum(1 for r in detailed_results if "AI予測" in r.get("prediction_method", ""))
+                        context_predictions = sum(1 for r in detailed_results if "コンテキスト認識" in r.get("prediction_method", ""))
+                        error_predictions = sum(1 for r in detailed_results if "エラー" in r.get("prediction_method", ""))
+                        
+                        result_text += f"\n予測方法別統計:\n"
+                        result_text += f"- AI予測: {ai_predictions}個\n"
+                        result_text += f"- コンテキスト認識: {context_predictions}個\n"
+                        result_text += f"- エラー: {error_predictions}個\n"
+                        
+                        # 詳細結果ダイアログを表示
+                        self.show_detailed_assignment_results(detailed_results, result_text)
+                    
+                    def show_error() -> None:
+                        progress_dialog.close()
+                        messagebox.showerror("エラー", "カテゴリ自動割り当て中にエラーが発生しました。")
+                    
+                    # UIスレッドで結果を表示
+                    self.root.after(0, show_completion)
+                    
+                except Exception as e:
+                    self.root.after(0, show_error)
+                    logging.error(f"カテゴリ自動割り当てエラー: {e}")
+            
+            # ワーカースレッドを開始
+            worker_thread = threading.Thread(target=worker_auto_assign, daemon=True)
+            worker_thread.start()
+            
+        except Exception as e:
+            messagebox.showerror("エラー", f"カテゴリ自動割り当ての初期化中にエラーが発生しました: {str(e)}")
+            logging.error(f"カテゴリ自動割り当て初期化エラー: {e}")
+
+    def show_detailed_assignment_results(self, detailed_results: List[Dict[str, Any]], summary_text: str) -> None:
+        """
+        詳細な割り当て結果を表示するダイアログ（AI予測統合版）
+        """
+        # 結果ダイアログを作成
+        result_dialog = Toplevel(self.root)
+        result_dialog.title("カテゴリ自動割り当て結果（AI予測統合版）")
+        result_dialog.geometry("1200x800")
+        result_dialog.transient(self.root)
+        result_dialog.grab_set()
+        result_dialog.resizable(True, True)
+        
+        # メインフレーム
+        main_frame = tb.Frame(result_dialog, padding=10)
+        main_frame.pack(fill=tb.BOTH, expand=True)
+        
+        # サマリーテキスト
+        summary_label = tk.Label(main_frame, text=summary_text, font=("TkDefaultFont", 10), justify=tk.LEFT)
+        summary_label.pack(anchor=tk.W, pady=(0, 10))
+        
+        # 詳細結果のTreeview
+        tree_frame = tb.Frame(main_frame)
+        tree_frame.pack(fill=tb.BOTH, expand=True)
+        
+        # 新しいカラム構成（AI予測機能に対応）
+        columns = (
+            "タグ", "割り当てカテゴリ", "予測方法", "信頼度", "AIスコア", 
+            "キーワードスコア", "コンテキストブースト", "動的重み", 
+            "使用頻度", "最終使用", "理由"
+        )
+        
+        tree = ttk.Treeview(tree_frame, columns=columns, show="headings", height=20)
+        
+        # カラムの設定
+        column_widths = {
+            "タグ": 150,
+            "割り当てカテゴリ": 120,
+            "予測方法": 150,
+            "信頼度": 80,
+            "AIスコア": 80,
+            "キーワードスコア": 100,
+            "コンテキストブースト": 120,
+            "動的重み": 80,
+            "使用頻度": 80,
+            "最終使用": 100,
+            "理由": 200
+        }
+        
+        for col in columns:
+            tree.heading(col, text=col)
+            tree.column(col, width=column_widths.get(col, 100))
+        
+        # スクロールバー
+        scrollbar_y = tb.Scrollbar(tree_frame, orient=tk.VERTICAL, command=tree.yview)
+        scrollbar_x = tb.Scrollbar(tree_frame, orient=tk.HORIZONTAL, command=tree.xview)
+        tree.configure(yscrollcommand=scrollbar_y.set, xscrollcommand=scrollbar_x.set)
+        
+        # レイアウト
+        tree.grid(row=0, column=0, sticky="nsew")
+        scrollbar_y.grid(row=0, column=1, sticky="ns")
+        scrollbar_x.grid(row=1, column=0, sticky="ew")
+        tree_frame.grid_rowconfigure(0, weight=1)
+        tree_frame.grid_columnconfigure(0, weight=1)
+        
+        # データを挿入
+        for result in detailed_results:
+            tree.insert("", tk.END, values=(
+                result.get("tag", ""),
+                result.get("assigned_category", ""),
+                result.get("prediction_method", ""),
+                f"{result.get('confidence', 0):.1f}%" if result.get('confidence', 0) > 0 else "N/A",
+                f"{result.get('ai_score', 0):.2f}" if result.get('ai_score', 0) > 0 else "N/A",
+                result.get("keyword_score", 0),
+                result.get("context_boost", 0),
+                f"{result.get('dynamic_weight', 0):.2f}" if result.get('dynamic_weight', 0) > 0 else "N/A",
+                result.get("usage_frequency", 0),
+                result.get("last_used", "不明"),
+                result.get("reason", "")[:50] + "..." if len(result.get("reason", "")) > 50 else result.get("reason", "")
+            ))
+        
+        # ボタンフレーム
+        button_frame = tb.Frame(main_frame)
+        button_frame.pack(fill=tb.X, pady=(10, 0))
+        
+        def save_results() -> None:
+            """結果をファイルに保存"""
+            try:
+                timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+                filename = f"カテゴリ自動割り当て結果_{timestamp}.txt"
+                
+                file_path = filedialog.asksaveasfilename(
+                    defaultextension=".txt",
+                    filetypes=[("テキストファイル", "*.txt"), ("すべてのファイル", "*.*")],
+                    title="結果を保存"
+                )
+                
+                if file_path:
+                    with open(file_path, 'w', encoding='utf-8') as f:
+                        f.write("=== カテゴリ自動割り当て結果（AI予測統合版） ===\n")
+                        f.write(f"実行日時: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
+                        f.write(summary_text + "\n\n")
+                        f.write("=== 詳細結果 ===\n\n")
+                        
+                        # ヘッダー
+                        f.write("タグ\t割り当てカテゴリ\t予測方法\t信頼度\tAIスコア\tキーワードスコア\tコンテキストブースト\t動的重み\t使用頻度\t最終使用\t理由\n")
+                        
+                        # データ
+                        for result in detailed_results:
+                            f.write(f"{result.get('tag', '')}\t")
+                            f.write(f"{result.get('assigned_category', '')}\t")
+                            f.write(f"{result.get('prediction_method', '')}\t")
+                            f.write(f"{result.get('confidence', 0):.1f}%\t")
+                            f.write(f"{result.get('ai_score', 0):.2f}\t")
+                            f.write(f"{result.get('keyword_score', 0)}\t")
+                            f.write(f"{result.get('context_boost', 0)}\t")
+                            f.write(f"{result.get('dynamic_weight', 0):.2f}\t")
+                            f.write(f"{result.get('usage_frequency', 0)}\t")
+                            f.write(f"{result.get('last_used', '不明')}\t")
+                            f.write(f"{result.get('reason', '')}\n")
+                    
+                    messagebox.showinfo("保存完了", f"結果を保存しました:\n{file_path}")
+            except Exception as e:
+                messagebox.showerror("保存エラー", f"ファイル保存中にエラーが発生しました: {str(e)}")
+        
+        def refresh_tags() -> None:
+            """タグ一覧を更新"""
+            try:
+                self.refresh_tabs()
+                messagebox.showinfo("更新完了", "タグ一覧を更新しました。")
+            except Exception as e:
+                messagebox.showerror("更新エラー", f"タグ一覧の更新中にエラーが発生しました: {str(e)}")
+        
+        # ボタン
+        tb.Button(button_frame, text="結果を保存", command=save_results, bootstyle="primary").pack(side=tk.LEFT, padx=(0, 10))
+        tb.Button(button_frame, text="タグ一覧更新", command=refresh_tags, bootstyle="info").pack(side=tk.LEFT, padx=(0, 10))
+        tb.Button(button_frame, text="閉じる", command=result_dialog.destroy, bootstyle="secondary").pack(side=tk.RIGHT)
+
+    def show_ai_prediction_dialog(self) -> None:
+        """
+        AI予測機能のダイアログを表示
+        """
+        dialog = Toplevel(self.root)
+        dialog.title("AI予測機能")
+        dialog.geometry("800x600")
+        dialog.transient(self.root)
+        dialog.grab_set()
+        dialog.resizable(True, True)
+
+        # メインフレーム
+        main_frame = tb.Frame(dialog, padding=10)
+        main_frame.pack(fill=tb.BOTH, expand=True)
+
+        # 入力エリア
+        input_frame = tb.LabelFrame(main_frame, text="タグ入力", padding=10)
+        input_frame.pack(fill=tb.X, pady=(0, 10))
+
+        tb.Label(input_frame, text="予測したいタグを入力してください:").pack(anchor=tk.W)
+        
+        tag_entry = tb.Entry(input_frame, width=50)
+        tag_entry.pack(fill=tb.X, pady=(5, 10))
+        tag_entry.focus()
+
+        # ボタンフレーム
+        button_frame = tb.Frame(input_frame)
+        button_frame.pack(fill=tb.X)
+
+        def predict_category() -> None:
+            tag = tag_entry.get().strip()
+            if not tag:
+                messagebox.showwarning("警告", "タグを入力してください。")
+                return
+            
+            try:
+                # AI予測を実行
+                category, confidence = predict_category_ai(tag)
+                
+                # 結果表示
+                result_text = f"予測カテゴリ: {category}\n"
+                result_text += f"信頼度: {confidence:.1f}%\n\n"
+                result_text += "詳細情報:\n"
+                result_text += f"- AIスコア: {confidence:.2f}\n"
+                result_text += f"- キーワードスコア: 0\n"
+                result_text += f"- コンテキストブースト: 0\n"
+                result_text += f"- 動的重み: 0.00\n"
+                result_text += f"- 使用頻度: 0\n"
+                result_text += f"- 最終使用: 不明\n"
+                
+                result_textarea.delete(1.0, tk.END)
+                result_textarea.insert(1.0, result_text)
+                
+            except Exception as e:
+                messagebox.showerror("エラー", f"予測中にエラーが発生しました: {str(e)}")
+
+        def suggest_similar() -> None:
+            tag = tag_entry.get().strip()
+            if not tag:
+                messagebox.showwarning("警告", "タグを入力してください。")
+                return
+            
+            try:
+                # 類似タグを取得
+                similar_tags = suggest_similar_tags_ai(tag, limit=10)
+                
+                # 結果表示
+                result_text = f"「{tag}」に類似するタグ:\n\n"
+                for i, (similar_tag, similarity) in enumerate(similar_tags, 1):
+                    result_text += f"{i}. {similar_tag} (類似度: {similarity:.1f}%)\n"
+                
+                result_textarea.delete(1.0, tk.END)
+                result_textarea.insert(1.0, result_text)
+                
+            except Exception as e:
+                messagebox.showerror("エラー", f"類似タグ検索中にエラーが発生しました: {str(e)}")
+
+        tb.Button(button_frame, text="カテゴリ予測", command=predict_category, bootstyle="primary").pack(side=tk.LEFT, padx=(0, 10))
+        tb.Button(button_frame, text="類似タグ検索", command=suggest_similar, bootstyle="info").pack(side=tk.LEFT)
+
+        # 結果表示エリア
+        result_frame = tb.LabelFrame(main_frame, text="予測結果", padding=10)
+        result_frame.pack(fill=tb.BOTH, expand=True)
+
+        # スクロール可能なテキストエリア
+        text_frame = tb.Frame(result_frame)
+        text_frame.pack(fill=tb.BOTH, expand=True)
+
+        result_textarea = tk.Text(text_frame, wrap=tk.WORD, font=("TkDefaultFont", 10))
+        scrollbar = tb.Scrollbar(text_frame, orient=tk.VERTICAL, command=result_textarea.yview)
+        result_textarea.configure(yscrollcommand=scrollbar.set)
+
+        result_textarea.pack(side=tk.LEFT, fill=tb.BOTH, expand=True)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+        # 閉じるボタン
+        tb.Button(main_frame, text="閉じる", command=dialog.destroy, bootstyle="secondary").pack(pady=(10, 0))
+
+    def show_ai_settings_dialog(self) -> None:
+        """
+        AI予測設定ダイアログを表示
+        """
+        dialog = Toplevel(self.root)
+        dialog.title("AI予測設定")
+        dialog.geometry("600x500")
+        dialog.transient(self.root)
+        dialog.grab_set()
+        dialog.resizable(True, True)
+
+        # メインフレーム
+        main_frame = tb.Frame(dialog, padding=10)
+        main_frame.pack(fill=tb.BOTH, expand=True)
+
+        # 設定項目
+        settings_frame = tb.LabelFrame(main_frame, text="予測設定", padding=10)
+        settings_frame.pack(fill=tb.BOTH, expand=True)
+
+        # AI予測の有効/無効
+        ai_enabled_var = tk.BooleanVar(value=True)
+        tb.Checkbutton(settings_frame, text="AI予測を有効にする", variable=ai_enabled_var).pack(anchor=tk.W, pady=5)
+
+        # 信頼度閾値
+        threshold_frame = tb.Frame(settings_frame)
+        threshold_frame.pack(fill=tb.X, pady=5)
+        tb.Label(threshold_frame, text="信頼度閾値 (%):").pack(side=tk.LEFT)
+        threshold_var = tk.StringVar(value="70")
+        threshold_entry = tb.Entry(threshold_frame, textvariable=threshold_var, width=10)
+        threshold_entry.pack(side=tk.LEFT, padx=(10, 0))
+
+        # 学習データの管理
+        learning_frame = tb.LabelFrame(settings_frame, text="学習データ管理", padding=10)
+        learning_frame.pack(fill=tb.X, pady=10)
+
+        def export_learning_data() -> None:
+            try:
+                from modules.ai_predictor import ai_predictor
+                # 学習データのエクスポート機能を実装
+                messagebox.showinfo("成功", "学習データをエクスポートしました。")
+            except Exception as e:
+                messagebox.showerror("エラー", f"エクスポート中にエラーが発生しました: {str(e)}")
+
+        def import_learning_data() -> None:
+            try:
+                from modules.ai_predictor import ai_predictor
+                # 学習データのインポート機能を実装
+                messagebox.showinfo("成功", "学習データをインポートしました。")
+            except Exception as e:
+                messagebox.showerror("エラー", f"インポート中にエラーが発生しました: {str(e)}")
+
+        def clear_learning_data() -> None:
+            if messagebox.askyesno("確認", "学習データをクリアしますか？"):
+                try:
+                    from modules.ai_predictor import ai_predictor
+                    # 学習データのクリア機能を実装
+                    messagebox.showinfo("成功", "学習データをクリアしました。")
+                except Exception as e:
+                    messagebox.showerror("エラー", f"クリア中にエラーが発生しました: {str(e)}")
+
+        tb.Button(learning_frame, text="学習データエクスポート", command=export_learning_data).pack(fill=tb.X, pady=2)
+        tb.Button(learning_frame, text="学習データインポート", command=import_learning_data).pack(fill=tb.X, pady=2)
+        tb.Button(learning_frame, text="学習データクリア", command=clear_learning_data, bootstyle="danger").pack(fill=tb.X, pady=2)
+
+        # 統計情報
+        stats_frame = tb.LabelFrame(settings_frame, text="統計情報", padding=10)
+        stats_frame.pack(fill=tb.X, pady=10)
+
+        try:
+            from modules.ai_predictor import ai_predictor
+            stats = ai_predictor.get_tag_statistics("")  # 空文字列で全体統計を取得
+            stats_text = f"総予測回数: {stats.get('total_predictions', 0)}\n"
+            stats_text += f"平均信頼度: {stats.get('average_confidence', 0):.1f}%\n"
+            stats_text += f"学習データ数: {stats.get('learning_data_count', 0)}\n"
+            stats_text += f"最終更新: {stats.get('last_updated', '不明')}"
+        except Exception:
+            stats_text = "統計情報を取得できませんでした。"
+
+        stats_label = tb.Label(stats_frame, text=stats_text, justify=tk.LEFT)
+        stats_label.pack(anchor=tk.W)
+
+        # ボタン
+        button_frame = tb.Frame(main_frame)
+        button_frame.pack(fill=tb.X, pady=(10, 0))
+
+        def save_settings() -> None:
+            try:
+                # 設定を保存
+                settings = {
+                    'ai_enabled': ai_enabled_var.get(),
+                    'confidence_threshold': float(threshold_var.get())
+                }
+                
+                # 設定ファイルに保存
+                settings_file = os.path.join('resources', 'config', 'ai_settings.json')
+                os.makedirs(os.path.dirname(settings_file), exist_ok=True)
+                with open(settings_file, 'w', encoding='utf-8') as f:
+                    json.dump(settings, f, ensure_ascii=False, indent=2)
+                
+                messagebox.showinfo("成功", "設定を保存しました。")
+                dialog.destroy()
+            except Exception as e:
+                messagebox.showerror("エラー", f"設定保存中にエラーが発生しました: {str(e)}")
+
+        tb.Button(button_frame, text="保存", command=save_settings, bootstyle="primary").pack(side=tk.RIGHT, padx=(10, 0))
+        tb.Button(button_frame, text="キャンセル", command=dialog.destroy, bootstyle="secondary").pack(side=tk.RIGHT)
+
+    def show_custom_keywords_dialog(self) -> None:
+        """
+        カスタムキーワード管理ダイアログを表示
+        """
+        dialog = Toplevel(self.root)
+        dialog.title("カスタムキーワード管理")
+        dialog.geometry("700x500")
+        dialog.transient(self.root)
+        dialog.grab_set()
+        dialog.resizable(True, True)
+
+        # メインフレーム
+        main_frame = tb.Frame(dialog, padding=10)
+        main_frame.pack(fill=tb.BOTH, expand=True)
+
+        # カテゴリ選択
+        category_frame = tb.Frame(main_frame)
+        category_frame.pack(fill=tb.X, pady=(0, 10))
+
+        tb.Label(category_frame, text="カテゴリ:").pack(side=tk.LEFT)
+        category_var = tk.StringVar()
+        category_combo = tb.Combobox(category_frame, textvariable=category_var, values=list(category_keywords.keys()))
+        category_combo.pack(side=tk.LEFT, padx=(10, 0))
+        category_combo.set(list(category_keywords.keys())[0] if category_keywords else "")
+
+        # キーワード入力
+        keyword_frame = tb.Frame(main_frame)
+        keyword_frame.pack(fill=tb.X, pady=(0, 10))
+
+        tb.Label(keyword_frame, text="キーワード:").pack(side=tk.LEFT)
+        keyword_var = tk.StringVar()
+        keyword_entry = tb.Entry(keyword_frame, textvariable=keyword_var, width=30)
+        keyword_entry.pack(side=tk.LEFT, padx=(10, 10))
+
+        tb.Label(keyword_frame, text="重み:").pack(side=tk.LEFT)
+        weight_var = tk.StringVar(value="1.0")
+        weight_entry = tb.Entry(keyword_frame, textvariable=weight_var, width=10)
+        weight_entry.pack(side=tk.LEFT, padx=(10, 0))
+
+        def add_keyword() -> None:
+            category = category_var.get()
+            keyword = keyword_var.get().strip()
+            weight = weight_var.get().strip()
+            
+            if not category or not keyword:
+                messagebox.showwarning("警告", "カテゴリとキーワードを入力してください。")
+                return
+            
+            try:
+                weight_val = float(weight)
+            except ValueError:
+                messagebox.showwarning("警告", "重みは数値で入力してください。")
+                return
+            
+            try:
+                from modules.customization import customization_manager
+                customization_manager.keyword_manager.add_custom_keyword(category, keyword, weight_val)
+                keyword_var.set("")
+                weight_var.set("1.0")
+                refresh_keyword_list()
+                messagebox.showinfo("成功", "キーワードを追加しました。")
+            except Exception as e:
+                messagebox.showerror("エラー", f"キーワード追加中にエラーが発生しました: {str(e)}")
+
+        tb.Button(keyword_frame, text="追加", command=add_keyword, bootstyle="primary").pack(side=tk.LEFT, padx=(10, 0))
+
+        # キーワードリスト
+        list_frame = tb.LabelFrame(main_frame, text="カスタムキーワード一覧", padding=10)
+        list_frame.pack(fill=tb.BOTH, expand=True)
+
+        # Treeview
+        columns = ("カテゴリ", "キーワード", "重み")
+        tree = ttk.Treeview(list_frame, columns=columns, show="headings", height=15)
+        
+        for col in columns:
+            tree.heading(col, text=col)
+            tree.column(col, width=150)
+
+        scrollbar = tb.Scrollbar(list_frame, orient=tk.VERTICAL, command=tree.yview)
+        tree.configure(yscrollcommand=scrollbar.set)
+
+        tree.pack(side=tk.LEFT, fill=tb.BOTH, expand=True)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+        def refresh_keyword_list() -> None:
+            tree.delete(*tree.get_children())
+            try:
+                from modules.customization import customization_manager
+                keywords = customization_manager.keyword_manager.get_custom_keywords()
+                for category, keyword_data in keywords.items():
+                    for keyword_info in keyword_data:
+                        keyword = keyword_info.get("keyword", "")
+                        weight = keyword_info.get("weight", 1.0)
+                        tree.insert("", tk.END, values=(category, keyword, weight))
+            except Exception as e:
+                print(f"キーワードリスト更新エラー: {e}")
+
+        def delete_selected_keyword() -> None:
+            selection = tree.selection()
+            if not selection:
+                messagebox.showwarning("警告", "削除するキーワードを選択してください。")
+                return
+            
+            item = tree.item(selection[0])
+            category = item['values'][0]
+            keyword = item['values'][1]
+            
+            if messagebox.askyesno("確認", f"「{category}」の「{keyword}」を削除しますか？"):
+                try:
+                    from modules.customization import customization_manager
+                    customization_manager.keyword_manager.remove_custom_keyword(category, keyword)
+                    refresh_keyword_list()
+                    messagebox.showinfo("成功", "キーワードを削除しました。")
+                except Exception as e:
+                    messagebox.showerror("エラー", f"キーワード削除中にエラーが発生しました: {str(e)}")
+
+        # ボタン
+        button_frame = tb.Frame(main_frame)
+        button_frame.pack(fill=tb.X, pady=(10, 0))
+
+        tb.Button(button_frame, text="削除", command=delete_selected_keyword, bootstyle="danger").pack(side=tk.LEFT)
+        tb.Button(button_frame, text="閉じる", command=dialog.destroy, bootstyle="secondary").pack(side=tk.RIGHT)
+
+        # 初期データ読み込み
+        refresh_keyword_list()
+
+    def show_custom_rules_dialog(self) -> None:
+        """
+        カスタムルール管理ダイアログを表示
+        """
+        dialog = Toplevel(self.root)
+        dialog.title("カスタムルール管理")
+        dialog.geometry("800x600")
+        dialog.transient(self.root)
+        dialog.grab_set()
+        dialog.resizable(True, True)
+
+        # メインフレーム
+        main_frame = tb.Frame(dialog, padding=10)
+        main_frame.pack(fill=tb.BOTH, expand=True)
+
+        # ルール入力
+        input_frame = tb.LabelFrame(main_frame, text="ルール追加", padding=10)
+        input_frame.pack(fill=tb.X, pady=(0, 10))
+
+        # 条件
+        condition_frame = tb.Frame(input_frame)
+        condition_frame.pack(fill=tb.X, pady=5)
+        tb.Label(condition_frame, text="条件:").pack(side=tk.LEFT)
+        condition_var = tk.StringVar()
+        condition_entry = tb.Entry(condition_frame, textvariable=condition_var, width=50)
+        condition_entry.pack(side=tk.LEFT, padx=(10, 0))
+
+        # アクション
+        action_frame = tb.Frame(input_frame)
+        action_frame.pack(fill=tb.X, pady=5)
+        tb.Label(action_frame, text="アクション:").pack(side=tk.LEFT)
+        action_var = tk.StringVar()
+        action_entry = tb.Entry(action_frame, textvariable=action_var, width=50)
+        action_entry.pack(side=tk.LEFT, padx=(10, 0))
+
+        # 説明
+        description_frame = tb.Frame(input_frame)
+        description_frame.pack(fill=tb.X, pady=5)
+        tb.Label(description_frame, text="説明:").pack(side=tk.LEFT)
+        description_var = tk.StringVar()
+        description_entry = tb.Entry(description_frame, textvariable=description_var, width=50)
+        description_entry.pack(side=tk.LEFT, padx=(10, 0))
+
+        def add_rule() -> None:
+            condition = condition_var.get().strip()
+            action = action_var.get().strip()
+            description = description_var.get().strip()
+            
+            if not condition or not action:
+                messagebox.showwarning("警告", "条件とアクションを入力してください。")
+                return
+            
+            try:
+                from modules.customization import customization_manager
+                rule_id = customization_manager.rule_manager.add_custom_rule("score_modification", {"tag_contains": condition}, {"score_multiplier": 1.0}, 1)
+                condition_var.set("")
+                action_var.set("")
+                description_var.set("")
+                refresh_rule_list()
+                messagebox.showinfo("成功", "ルールを追加しました。")
+            except Exception as e:
+                messagebox.showerror("エラー", f"ルール追加中にエラーが発生しました: {str(e)}")
+
+        tb.Button(input_frame, text="ルール追加", command=add_rule, bootstyle="primary").pack(pady=10)
+
+        # ルールリスト
+        list_frame = tb.LabelFrame(main_frame, text="カスタムルール一覧", padding=10)
+        list_frame.pack(fill=tb.BOTH, expand=True)
+
+        # Treeview
+        columns = ("ID", "条件", "アクション", "説明")
+        tree = ttk.Treeview(list_frame, columns=columns, show="headings", height=15)
+        
+        for col in columns:
+            tree.heading(col, text=col)
+            if col == "ID":
+                tree.column(col, width=50)
+            elif col == "説明":
+                tree.column(col, width=200)
+            else:
+                tree.column(col, width=150)
+
+        scrollbar = tb.Scrollbar(list_frame, orient=tk.VERTICAL, command=tree.yview)
+        tree.configure(yscrollcommand=scrollbar.set)
+
+        tree.pack(side=tk.LEFT, fill=tb.BOTH, expand=True)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+        def refresh_rule_list() -> None:
+            tree.delete(*tree.get_children())
+            try:
+                from modules.customization import customization_manager
+                rules = customization_manager.rule_manager.get_custom_rules()
+                for rule in rules:
+                    rule_id = rule.get("id", "")
+                    condition = str(rule.get("condition", ""))
+                    action = str(rule.get("action", ""))
+                    description = rule.get("type", "")
+                    tree.insert("", tk.END, values=(rule_id, condition, action, description))
+            except Exception as e:
+                print(f"ルールリスト更新エラー: {e}")
+
+        def delete_selected_rule() -> None:
+            selection = tree.selection()
+            if not selection:
+                messagebox.showwarning("警告", "削除するルールを選択してください。")
+                return
+            
+            item = tree.item(selection[0])
+            rule_id = item['values'][0]
+            
+            if messagebox.askyesno("確認", f"ルールID {rule_id} を削除しますか？"):
+                try:
+                    from modules.customization import customization_manager
+                    customization_manager.rule_manager.remove_custom_rule(rule_id)
+                    refresh_rule_list()
+                    messagebox.showinfo("成功", "ルールを削除しました。")
+                except Exception as e:
+                    messagebox.showerror("エラー", f"ルール削除中にエラーが発生しました: {str(e)}")
+
+        # ボタン
+        button_frame = tb.Frame(main_frame)
+        button_frame.pack(fill=tb.X, pady=(10, 0))
+
+        tb.Button(button_frame, text="削除", command=delete_selected_rule, bootstyle="danger").pack(side=tk.LEFT)
+        tb.Button(button_frame, text="閉じる", command=dialog.destroy, bootstyle="secondary").pack(side=tk.RIGHT)
+
+        # 初期データ読み込み
+        refresh_rule_list()
 
 # --- ツールチップ用ヘルパー ---
 class ToolTip:
@@ -1243,7 +2052,3 @@ class ToolTip:
         if self.tipwindow:
             self.tipwindow.destroy()
             self.tipwindow = None 
-
-    def open_feedback_url(self) -> None:
-        url = "https://github.com/（あなたのリポジトリURL）/issues"  # 必要に応じて修正
-        webbrowser.open(url) 

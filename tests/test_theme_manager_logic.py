@@ -1,6 +1,8 @@
 import pytest
-import tempfile
+import sys
 import os
+sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+import tempfile
 import json
 import logging
 from modules.theme_manager import get_available_themes_pure, load_theme_settings_pure, save_theme_settings_pure
@@ -50,19 +52,47 @@ def test_load_theme_settings_pure_logs_error_on_invalid_json(tmp_path, caplog):
 def test_theme_manager_broken_settings_file(tmp_path, monkeypatch):
     import os, json, shutil
     from modules.theme_manager import ThemeManager, THEME_FILE
-    # バックアップ
-    if os.path.exists(THEME_FILE):
-        shutil.copy2(THEME_FILE, THEME_FILE + ".bak")
-    # 壊れたファイルを書き込む
-    with open(THEME_FILE, "w", encoding="utf-8") as f:
-        f.write("{invalid json")
-    tm = ThemeManager()
-    assert tm.current_theme == "darkly"
-    # 復元
-    if os.path.exists(THEME_FILE + ".bak"):
-        shutil.move(THEME_FILE + ".bak", THEME_FILE)
+    
+    # 元のテーマ設定ファイルをバックアップ
+    original_theme_file_exists = os.path.exists(THEME_FILE)
+    original_theme_data = None
+    
+    if original_theme_file_exists:
+        # 元の設定をバックアップ
+        with open(THEME_FILE, 'r', encoding='utf-8') as f:
+            original_theme_data = json.load(f)
+        # テスト用の一時ファイルにコピー
+        test_theme_file = tmp_path / "test_theme_settings.json"
+        shutil.copy2(THEME_FILE, test_theme_file)
     else:
-        os.remove(THEME_FILE) 
+        # 元のファイルが存在しない場合はテスト用ファイルを作成
+        test_theme_file = tmp_path / "test_theme_settings.json"
+        with open(test_theme_file, 'w', encoding='utf-8') as f:
+            json.dump({"current_theme": "darkly"}, f, ensure_ascii=False)
+    
+    try:
+        # テスト用のテーマ設定ファイルを使用するようにモンキーパッチ
+        import modules.theme_manager
+        original_theme_file = modules.theme_manager.THEME_FILE
+        modules.theme_manager.THEME_FILE = str(test_theme_file)
+        
+        # 壊れたファイルを書き込む
+        with open(test_theme_file, "w", encoding="utf-8") as f:
+            f.write("{invalid json")
+        tm = ThemeManager()
+        assert tm.current_theme == "darkly"
+        
+    finally:
+        # 元のテーマ設定ファイルを復元
+        modules.theme_manager.THEME_FILE = original_theme_file
+        
+        if original_theme_file_exists and original_theme_data is not None:
+            # 元の設定を復元
+            with open(THEME_FILE, 'w', encoding='utf-8') as f:
+                json.dump(original_theme_data, f, ensure_ascii=False)
+        elif not original_theme_file_exists and os.path.exists(THEME_FILE):
+            # 元々存在しなかった場合は削除
+            os.remove(THEME_FILE)
 
 def test_save_theme_settings_pure_permission_error(monkeypatch, tmp_path):
     """書き込み権限エラー時にFalseが返ることを検証"""
@@ -84,13 +114,55 @@ import logging
 def test_theme_manager_save_permission_error(monkeypatch, tmp_path, caplog):
     """ThemeManager.save_theme_settingsでPermissionError時にlogger.errorが出ることを検証"""
     from modules.theme_manager import ThemeManager, THEME_FILE
-    tm = ThemeManager()
-    def raise_permission_error(*a, **kw):
-        raise PermissionError("no permission")
-    monkeypatch.setattr("builtins.open", raise_permission_error)
-    with caplog.at_level(logging.ERROR):
-        tm.save_theme_settings("darkly")
-        assert any("エラー" in r or "permission" in r for r in caplog.text.lower().splitlines()) 
+    import os
+    import json
+    import shutil
+    
+    # 元のテーマ設定ファイルをバックアップ
+    original_theme_file_exists = os.path.exists(THEME_FILE)
+    original_theme_data = None
+    
+    if original_theme_file_exists:
+        # 元の設定をバックアップ
+        with open(THEME_FILE, 'r', encoding='utf-8') as f:
+            original_theme_data = json.load(f)
+        # テスト用の一時ファイルにコピー
+        test_theme_file = tmp_path / "test_theme_settings.json"
+        shutil.copy2(THEME_FILE, test_theme_file)
+    else:
+        # 元のファイルが存在しない場合はテスト用ファイルを作成
+        test_theme_file = tmp_path / "test_theme_settings.json"
+        with open(test_theme_file, 'w', encoding='utf-8') as f:
+            json.dump({"current_theme": "darkly"}, f, ensure_ascii=False)
+    
+    try:
+        # テスト用のテーマ設定ファイルを使用するようにモンキーパッチ
+        import modules.theme_manager
+        original_theme_file = modules.theme_manager.THEME_FILE
+        modules.theme_manager.THEME_FILE = str(test_theme_file)
+        
+        tm = ThemeManager()
+        def raise_permission_error(*a, **kw):
+            raise PermissionError("no permission")
+        monkeypatch.setattr("builtins.open", raise_permission_error)
+        with caplog.at_level(logging.ERROR):
+            tm.save_theme_settings("darkly")
+            assert any("エラー" in r or "permission" in r for r in caplog.text.lower().splitlines())
+        
+    finally:
+        # 元のテーマ設定ファイルを復元
+        modules.theme_manager.THEME_FILE = original_theme_file
+        
+        # モンキーパッチを解除してからファイル操作を行う
+        monkeypatch.undo()
+        
+        if original_theme_file_exists and original_theme_data is not None:
+            # 元の設定を復元
+            with open(THEME_FILE, 'w', encoding='utf-8') as f:
+                json.dump(original_theme_data, f, ensure_ascii=False)
+        elif not original_theme_file_exists and os.path.exists(THEME_FILE):
+            # 元々存在しなかった場合は削除
+            os.remove(THEME_FILE)
 
 def test_load_theme_settings_pure_directory_error(tmp_path):
     """ディレクトリを指定した場合の異常系テスト"""
@@ -131,24 +203,51 @@ def test_theme_manager_initialize_with_corrupted_file(tmp_path, monkeypatch):
     """破損したテーマファイルで初期化する場合の異常系テスト"""
     from modules.theme_manager import ThemeManager, THEME_FILE
     import shutil
+    import os
+    import json
     
-    # バックアップ
-    if os.path.exists(THEME_FILE):
-        shutil.copy2(THEME_FILE, THEME_FILE + ".bak")
+    # 元のテーマ設定ファイルをバックアップ
+    original_theme_file_exists = os.path.exists(THEME_FILE)
+    original_theme_data = None
     
-    # 破損したファイルを作成
-    with open(THEME_FILE, "w", encoding="utf-8") as f:
-        f.write("{invalid json content")
-    
-    # ThemeManager初期化（デフォルトテーマが使用されることを確認）
-    tm = ThemeManager()
-    assert tm.current_theme == "darkly"
-    
-    # 復元
-    if os.path.exists(THEME_FILE + ".bak"):
-        shutil.move(THEME_FILE + ".bak", THEME_FILE)
+    if original_theme_file_exists:
+        # 元の設定をバックアップ
+        with open(THEME_FILE, 'r', encoding='utf-8') as f:
+            original_theme_data = json.load(f)
+        # テスト用の一時ファイルにコピー
+        test_theme_file = tmp_path / "test_theme_settings.json"
+        shutil.copy2(THEME_FILE, test_theme_file)
     else:
-        os.remove(THEME_FILE)
+        # 元のファイルが存在しない場合はテスト用ファイルを作成
+        test_theme_file = tmp_path / "test_theme_settings.json"
+        with open(test_theme_file, 'w', encoding='utf-8') as f:
+            json.dump({"current_theme": "darkly"}, f, ensure_ascii=False)
+    
+    try:
+        # テスト用のテーマ設定ファイルを使用するようにモンキーパッチ
+        import modules.theme_manager
+        original_theme_file = modules.theme_manager.THEME_FILE
+        modules.theme_manager.THEME_FILE = str(test_theme_file)
+        
+        # 破損したファイルを作成
+        with open(test_theme_file, "w", encoding="utf-8") as f:
+            f.write("{invalid json content")
+        
+        # ThemeManager初期化（デフォルトテーマが使用されることを確認）
+        tm = ThemeManager()
+        assert tm.current_theme == "darkly"
+        
+    finally:
+        # 元のテーマ設定ファイルを復元
+        modules.theme_manager.THEME_FILE = original_theme_file
+        
+        if original_theme_file_exists and original_theme_data is not None:
+            # 元の設定を復元
+            with open(THEME_FILE, 'w', encoding='utf-8') as f:
+                json.dump(original_theme_data, f, ensure_ascii=False)
+        elif not original_theme_file_exists and os.path.exists(THEME_FILE):
+            # 元々存在しなかった場合は削除
+            os.remove(THEME_FILE)
 
 def test_get_available_themes_pure_returns_expected_themes():
     """利用可能なテーマ一覧が正しく返されることを検証"""

@@ -1,6 +1,8 @@
 import pytest
-import tempfile
+import sys
 import os
+sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+import tempfile
 import json
 from modules.constants import safe_load_json, auto_assign_category_pure
 

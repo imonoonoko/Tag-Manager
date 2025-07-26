@@ -1,4 +1,7 @@
 import pytest
+import sys
+import os
+sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 import tkinter as tk
 import ttkbootstrap as tb
 from modules.dialogs import CategorySelectDialog, BulkCategoryDialog, get_category_choices, validate_bulk_category_action, safe_validate_bulk_category_action

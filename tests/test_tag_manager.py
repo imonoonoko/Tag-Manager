@@ -1,6 +1,8 @@
 import pytest
-import sqlite3
+import sys
 import os
+sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+import sqlite3
 import json
 from modules.tag_manager import TagManager
 from modules.tag_manager import normalize_tag, is_valid_tag

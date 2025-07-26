@@ -1,8 +1,10 @@
 import pytest
+import sys
+import os
+sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 import tkinter as tk
 import ttkbootstrap as tb
 import logging
-import os
 import json
 from modules.ui_main import TagManagerApp, build_category_list, build_category_descriptions, ProgressDialog
 

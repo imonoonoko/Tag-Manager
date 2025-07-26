@@ -1,4 +1,7 @@
 import pytest
+import sys
+import os
+sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from modules.dialogs import get_category_choices, validate_bulk_category_action
 import logging
 from modules.dialogs import BulkCategoryDialog

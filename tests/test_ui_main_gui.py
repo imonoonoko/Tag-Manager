@@ -1,4 +1,7 @@
 import pytest
+import sys
+import os
+sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 import ttkbootstrap as tb
 from modules.ui_main import TagManagerApp
 import tempfile
@@ -7,6 +10,7 @@ import tkinter
 import tkinter.messagebox as mb
 import tkinter.ttk as ttk
 import tkinter as tk
+import json
 
 # Tkinter/ttkbootstrapが使えない場合は全GUIテストをスキップ
 try:
@@ -27,13 +31,51 @@ def test_tag_manager_app_category_list(tmp_path):
         
         # テスト用の独立したデータベースファイルを使用
         test_db = tmp_path / "test_tag_manager_app_category_list.db"
-        app = TagManagerApp(root, db_file=str(test_db))
-        clist = app.category_list
-        for k in ["全カテゴリ", "お気に入り", "最近使った", "未分類"]:
-            assert k in clist
-        for k in app.category_keywords.keys():
-            assert k in clist
-        root.destroy()
+        
+        # テスト用のカテゴリ設定ファイルを作成
+        test_categories_file = tmp_path / "test_categories.json"
+        test_categories = {
+            "服装・ファッション": ["dress", "skirt"],
+            "髪型・ヘアスタイル": ["long hair", "short hair"],
+            "小物・アクセサリー": ["bag", "glasses"],
+            "表情・感情": ["smile", "smiling"],
+            "ポーズ・アクション": ["sitting", "standing"],
+            "人物・キャラクター": ["original character", "oc"],
+            "色彩・照明": ["bright", "dark"],
+            "特殊効果・フィルター": ["sparkles", "fog"],
+            "アートスタイル・技法": ["digital art", "watercolor"],
+            "背景・環境": ["background", "city"]
+        }
+        with open(test_categories_file, 'w', encoding='utf-8') as f:
+            json.dump(test_categories, f, ensure_ascii=False, indent=4)
+        
+        # モンキーパッチでカテゴリファイルパスを変更
+        import modules.ui_main
+        original_load_categories = modules.ui_main.TagManagerApp.load_categories
+        
+        def mock_load_categories(self):
+            try:
+                with open(test_categories_file, 'r', encoding='utf-8') as f:
+                    self.category_keywords = json.load(f)
+            except Exception as e:
+                self.logger.error(f"categories.jsonの読み込みに失敗しました: {e}")
+                self.category_keywords = {}
+        
+        modules.ui_main.TagManagerApp.load_categories = mock_load_categories
+        
+        try:
+            app = TagManagerApp(root, db_file=str(test_db))
+            clist = app.category_list
+            print(f"DEBUG: category_list = {clist}")
+            print(f"DEBUG: category_keywords.keys() = {list(app.category_keywords.keys())}")
+            for k in ["全カテゴリ", "お気に入り", "最近使った", "未分類"]:
+                assert k in clist
+            for k in app.category_keywords.keys():
+                assert k in clist
+        finally:
+            # 元のメソッドを復元
+            modules.ui_main.TagManagerApp.load_categories = original_load_categories
+            root.destroy()
     except tkinter.TclError:
         pytest.skip("TclError発生のためスキップ")
 
@@ -574,52 +616,89 @@ def test_e2e_settings_save_load(tmp_path):
     
     # テスト用の独立したデータベースファイルを使用
     test_db = tmp_path / "test_e2e_settings_save_load.db"
-    app = TagManagerApp(root, db_file=str(test_db))
     
-    # 設定保存・読み込みのテスト
-    # 1. テーマ設定の保存
-    original_theme = app.theme_manager.current_theme
-    test_theme = "cosmo"  # 利用可能なテーマの一つ
-    
-    # テーマを変更
-    app.apply_theme(test_theme)
-    
-    # 設定が保存されていることを確認
-    assert app.theme_manager.current_theme == test_theme, f"テーマが正しく設定されていません: {app.theme_manager.current_theme}"
-    
-    # 2. 新しいアプリケーションインスタンスで設定を読み込み
-    root2 = tb.Window()
-    root2.withdraw()
-    
-    app2 = TagManagerApp(root2, db_file=str(test_db))
-    
-    # 設定が正しく読み込まれていることを確認
-    assert app2.theme_manager.current_theme == test_theme, f"新しいインスタンスでテーマが正しく読み込まれていません: {app2.theme_manager.current_theme}"
-    
-    # 3. 設定ファイルの整合性確認
-    # テーマ設定ファイルが存在し、正しい形式であることを確認
+    # 元のテーマ設定ファイルをバックアップ
     import os
     import json
-    theme_file = os.path.join('resources', 'config', 'theme_settings.json')
+    import shutil
+    from modules.theme_manager import THEME_FILE
     
-    if os.path.exists(theme_file):
-        with open(theme_file, 'r', encoding='utf-8') as f:
-            theme_data = json.load(f)
-        assert 'current_theme' in theme_data, "テーマ設定ファイルにcurrent_themeが含まれていません"
-        assert isinstance(theme_data['current_theme'], str), "current_themeが文字列ではありません"
+    original_theme_file_exists = os.path.exists(THEME_FILE)
+    original_theme_data = None
     
-    # 4. カテゴリ設定の読み込み確認
-    assert hasattr(app2, 'category_keywords'), "category_keywords属性が存在しません"
-    assert isinstance(app2.category_keywords, dict), "category_keywordsが辞書ではありません"
-    assert len(app2.category_keywords) > 0, "category_keywordsが空です"
+    if original_theme_file_exists:
+        # 元の設定をバックアップ
+        with open(THEME_FILE, 'r', encoding='utf-8') as f:
+            original_theme_data = json.load(f)
+        # テスト用の一時ファイルにコピー
+        test_theme_file = tmp_path / "test_theme_settings.json"
+        shutil.copy2(THEME_FILE, test_theme_file)
+    else:
+        # 元のファイルが存在しない場合はテスト用ファイルを作成
+        test_theme_file = tmp_path / "test_theme_settings.json"
+        with open(test_theme_file, 'w', encoding='utf-8') as f:
+            json.dump({"theme": "darkly"}, f, ensure_ascii=False)
     
-    # 5. カテゴリ説明の読み込み確認
-    assert hasattr(app2, 'category_descriptions'), "category_descriptions属性が存在しません"
-    assert isinstance(app2.category_descriptions, dict), "category_descriptionsが辞書ではありません"
-    assert len(app2.category_descriptions) > 0, "category_descriptionsが空です"
+    try:
+        # テスト用のテーマ設定ファイルを使用するようにモンキーパッチ
+        import modules.theme_manager
+        original_theme_file = modules.theme_manager.THEME_FILE
+        modules.theme_manager.THEME_FILE = str(test_theme_file)
+        
+        app = TagManagerApp(root, db_file=str(test_db))
+        
+        # 設定保存・読み込みのテスト
+        # 1. テーマ設定の保存
+        original_theme = app.theme_manager.current_theme
+        test_theme = "cosmo"  # 利用可能なテーマの一つ
+        
+        # テーマを変更
+        app.apply_theme(test_theme)
+        
+        # 設定が保存されていることを確認
+        assert app.theme_manager.current_theme == test_theme, f"テーマが正しく設定されていません: {app.theme_manager.current_theme}"
+        
+        # 2. 新しいアプリケーションインスタンスで設定を読み込み
+        root2 = tb.Window()
+        root2.withdraw()
+        
+        app2 = TagManagerApp(root2, db_file=str(test_db))
+        
+        # 設定が正しく読み込まれていることを確認
+        assert app2.theme_manager.current_theme == test_theme, f"新しいインスタンスでテーマが正しく読み込まれていません: {app2.theme_manager.current_theme}"
+        
+        # 3. 設定ファイルの整合性確認
+        # テーマ設定ファイルが存在し、正しい形式であることを確認
+        if os.path.exists(test_theme_file):
+            with open(test_theme_file, 'r', encoding='utf-8') as f:
+                theme_data = json.load(f)
+            assert 'theme' in theme_data, "テーマ設定ファイルにthemeが含まれていません"
+        
+        # 4. カテゴリ設定の読み込み確認
+        assert hasattr(app2, 'category_keywords'), "category_keywords属性が存在しません"
+        assert isinstance(app2.category_keywords, dict), "category_keywordsが辞書ではありません"
+        assert len(app2.category_keywords) > 0, "category_keywordsが空です"
+        
+        # 5. カテゴリ説明の読み込み確認
+        assert hasattr(app2, 'category_descriptions'), "category_descriptions属性が存在しません"
+        assert isinstance(app2.category_descriptions, dict), "category_descriptionsが辞書ではありません"
+        assert len(app2.category_descriptions) > 0, "category_descriptionsが空です"
+        
+        # クリーンアップ
+        root2.destroy()
+        
+    finally:
+        # 元のテーマ設定ファイルを復元
+        modules.theme_manager.THEME_FILE = original_theme_file
+        
+        if original_theme_file_exists and original_theme_data is not None:
+            # 元の設定を復元
+            with open(THEME_FILE, 'w', encoding='utf-8') as f:
+                json.dump(original_theme_data, f, ensure_ascii=False)
+        elif not original_theme_file_exists and os.path.exists(THEME_FILE):
+            # 元々存在しなかった場合は削除
+            os.remove(THEME_FILE)
     
-    # クリーンアップ
-    root2.destroy()
     root.destroy() 
 
 @pytest.mark.skipif(not TK_AVAILABLE, reason="Tkinter/ttkbootstrapが利用できない環境のためスキップ")
