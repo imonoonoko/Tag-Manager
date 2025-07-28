@@ -23,6 +23,7 @@ AI画像生成用のプロンプトタグを効率的に管理するためのGUI
 - **コンテキスト認識**: タグの組み合わせを考慮した分類
 - **AI予測**: 機械学習によるカテゴリ予測
 - **類似タグ提案**: 既存タグとの類似性分析
+- **ローカルAI**: Hugging Faceモデルによるオフライン処理
 
 ### 🎛️ カスタマイズ機能
 - **カスタムキーワード**: ユーザー定義の分類キーワード
@@ -43,16 +44,26 @@ Tag-Manager-Nightly/
 │   ├── config.py                # 設定管理
 │   ├── ai_predictor.py          # AI予測機能
 │   ├── customization.py         # カスタマイズ機能
-│   └── common_words.py          # 共通語除外
+│   ├── huggingface_manager.py   # Hugging Face連携
+│   ├── local_hf_manager.py      # ローカルAI管理
+│   ├── context_analyzer.py      # コンテキスト分析
+│   ├── category_manager.py      # カテゴリ管理
+│   ├── common_words.py          # 共通語除外
+│   ├── ui_dialogs.py            # UIダイアログ
+│   ├── ui_export_import.py      # エクスポート・インポート
+│   ├── ui_utils.py              # UIユーティリティ
+│   └── spec_checker/            # 仕様チェッカー
 ├── data/                        # データファイル
 │   └── tags.db                  # SQLiteデータベース
 ├── backup/                      # バックアップ
 │   ├── YYYY-MM-DD/             # 日付別バックアップ
-│   └── test/                   # テスト用バックアップ
+│   ├── test/                   # テスト用バックアップ
+│   └── external_data/          # 外部データ
 ├── resources/                   # リソース
 │   ├── config/                 # 設定ファイル
 │   └── icons/                  # アイコンファイル
 ├── tests/                      # テスト
+├── scripts/                    # 自動化スクリプト
 ├── logs/                       # ログファイル
 └── docs/                       # ドキュメント
 ```
@@ -129,12 +140,12 @@ run_tests.bat
 
 ## 🛠️ 開発環境
 
-- **Python**: 3.8+
-- **GUI**: ttkbootstrap
+- **Python**: 3.10.6+
+- **GUI**: ttkbootstrap 1.14.1+
 - **データベース**: SQLite3
-- **翻訳**: deep-translator
-- **テスト**: pytest
-- **型チェック**: mypy
+- **翻訳**: deep-translator 1.11.4+
+- **AI/ML**: transformers 4.54.0+, torch 2.4.1+, scikit-learn 1.7.1+
+- **テスト**: pytest 8.4.1+, mypy 1.17.0+
 
 ## 📋 開発ガイドライン
 
@@ -247,3 +258,13 @@ run_tests.bat
 - カテゴリ構造は変更されません。新規カテゴリ追加は手動で行ってください
 - 外部データセットは再利用可能な形で保存されます
 - 既存キーワードと重複するものは追加されません
+
+## 🔧 最新機能・改善点
+
+### v1.0.0 (2025/01/27)
+- **AI機能強化**: Hugging Face Transformers統合
+- **ローカルAI**: オフライン処理対応
+- **品質保証**: 包括的な自動チェックシステム
+- **パフォーマンス**: モジュール分離による軽量化
+- **商用利用**: ライセンス情報の明確化
+- **個人データ保護**: Git除外設定の強化
