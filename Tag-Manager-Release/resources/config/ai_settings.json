@@ -1,0 +1,20 @@
+{
+  "local_ai_disabled": false,
+  "use_gpu": false,
+  "model_name": "multilingual",
+  "confidence_threshold": 0.5,
+  "auto_suggest_enabled": true,
+  "learning_enabled": true,
+  "cache_enabled": true,
+  "max_cache_size_mb": 1000,
+  "batch_size": 16,
+  "timeout_seconds": 60,
+  "retry_attempts": 3,
+  "log_level": "INFO",
+  "force_cpu": true,
+  "disable_meta_tensor": true,
+  "use_legacy_model_loading": true,
+  "skip_model_device_assignment": true,
+  "use_cpu_only_initialization": true,
+  "use_lightweight_embeddings": true
+} 
