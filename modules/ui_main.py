@@ -14,16 +14,29 @@ import logging
 import sqlite3
 import json
 import re
+import time
 from typing import Any, Dict, List, Optional, Callable, cast, Tuple
 import webbrowser
 
 from modules.constants import category_keywords, DB_FILE, TRANSLATING_PLACEHOLDER, auto_assign_category
 from modules.theme_manager import ThemeManager
 from modules.tag_manager import TagManager
-from modules.dialogs import CategorySelectDialog, BulkCategoryDialog
+from modules.dialogs import CategorySelectDialog, BulkCategoryDialog, MultiTagCategoryAssignDialog, LowConfidenceTagsDialog
 # 新しいモジュールからインポート
-from modules.ai_predictor import predict_category_ai, suggest_similar_tags_ai
+from modules.ai_predictor import predict_category_ai, suggest_similar_tags_ai, get_ai_predictor
 from modules.customization import get_customized_category_keywords, apply_custom_rules
+
+# 分離されたモジュールからインポート
+from .ui_dialogs import ProgressDialog, ToolTip, show_help_dialog, show_about_dialog, show_license_info_dialog, show_shortcuts_dialog
+from .ui_export_import import export_personal_data, import_personal_data, export_tags, export_all_tags, backup_database
+from .ui_utils import (
+    build_category_list, build_category_descriptions, filter_tags_optimized,
+    sort_prompt_by_priority, format_output_text, strip_weight_from_tag,
+    is_float, extract_tags_from_prompt, make_theme_menu_command,
+    make_set_category_command, make_export_tags_command, make_show_context_menu_event,
+    make_set_status_clear, make_set_progress_message, make_close_progress_dialog,
+    worker_thread_fetch, show_guide_on_startup, clear_search, get_search_text
+)
 
 # --- テスト容易化のためのロジック分離 ---
 def build_category_list(category_keywords: Dict[str, List[str]]) -> List[str]:
@@ -58,29 +71,6 @@ def build_category_descriptions() -> Dict[str, str]:
 
 # TagManagerAppクラス（UI構築・イベント処理）をmain.pyから移動
 
-class ProgressDialog:
-    def __init__(self, parent: Any, title: str = "処理中", message: str = "処理中です。しばらくお待ちください...") -> None:
-        self.top = Toplevel(parent)
-        self.top.title(title)
-        self.top.geometry("350x100")
-        self.top.transient(parent)
-        self.top.grab_set()
-        self.top.resizable(False, False)
-        self.label = tk.Label(self.top, text=message, font=("TkDefaultFont", 12))
-        self.label.pack(expand=True, fill=tk.BOTH, padx=20, pady=20)
-        def disable_close() -> None:
-            pass
-        self.top.protocol("WM_DELETE_WINDOW", disable_close)  # 閉じるボタン無効
-        self.top.update()
-    
-    def set_message(self, msg: str) -> None:
-        self.label.config(text=msg)
-        self.top.update()
-    
-    def close(self) -> None:
-        self.top.grab_release()
-        self.top.destroy()
-
 class TagManagerApp:
     def __init__(self, root: Any, db_file: Optional[str] = None) -> None:
         self.root = root
@@ -99,13 +89,84 @@ class TagManagerApp:
         self.selected_tags: List[str] = []
         self.weight_values: Dict[str, float] = {}
         self.newly_added_tags: List[str] = []
+        self.weight_var = tk.DoubleVar(value=1.0)
+        self.weight_value_label: Optional[tk.Label] = None
+        self.label_weight_display: Optional[tk.Label] = None
+        self.output_text: Optional[tk.Text] = None
+        self.entry_search: Optional[tb.Entry] = None
+        self.listbox_cat: Optional[tk.Listbox] = None
+        self.category_description_label: Optional[tb.Label] = None
+        self.menu_status_label: Optional[tk.Label] = None
+        self.main_frame: Optional[tb.Frame] = None
+        self.content_frame: Optional[tb.Frame] = None
+        self.left_panel: Optional[tb.Frame] = None
+        self.treeview_frame: Optional[tb.Frame] = None
+        self.details_panel: Optional[tb.Frame] = None
+        self.search_button_frame: Optional[tb.Frame] = None
+        self.trees: Dict[str, Any] = {}
+        self.tree: Optional[Any] = None
+        self.category_list: List[str] = []
+        self.current_category = "全カテゴリ"
+        self.category_keywords: Dict[str, List[str]] = {}
+        self.prompt_structure_priorities: Dict[str, int] = {}
+        self.category_descriptions: Dict[str, str] = {}
+        
+        # コールバック関数の設定
+        def select_tag_callback(tag: str) -> None:
+            self.select_tag_in_tree(tag)
+        self.select_tag_callback = select_tag_callback
+        
+        def close_progress_dialog() -> None:
+            if hasattr(self, "progress_dialog"):
+                self.progress_dialog.close()
+        self.close_progress_dialog = close_progress_dialog
+        
+        def set_progress_message(msg: str) -> None:
+            if hasattr(self, "progress_dialog"):
+                self.progress_dialog.set_message(msg)
+        self.set_progress_message = set_progress_message
+        
+        def clear_status_var() -> None:
+            self.status_var.set("")
+        self.clear_status_var = clear_status_var
+        
+        def show_context_menu_event(event: Any, t: Any) -> None:
+            self.show_context_menu(event, t)
+        self.show_context_menu_event = show_context_menu_event
+        
+        def copy_selected_tags_command() -> None:
+            self.copy_selected_tags()
+        self.copy_selected_tags_command = copy_selected_tags_command
+        
+        def set_category_from_menu_command(c: str) -> None:
+            self.set_category_from_menu(c)
+        self.set_category_from_menu_command = set_category_from_menu_command
+        
+        def export_tags_command(tree: Any) -> None:
+            export_tags(self, tree)
+        self.export_tags_command = export_tags_command
+        
+        def prompt_and_add_tags_negative() -> None:
+            self.prompt_and_add_tags(is_negative=True)
+        self.prompt_and_add_tags_negative = prompt_and_add_tags_negative
+        
+        def apply_theme_command(name: str) -> None:
+            self.apply_theme(name)
+        self.apply_theme_command = apply_theme_command
+        
+        def wm_delete_window_none() -> None:
+            pass
+        self.wm_delete_window_none = wm_delete_window_none
+
+        # カテゴリと設定の読み込み
         self.load_categories()
         self.load_prompt_structure_priorities()
         self.load_category_descriptions()
-        # 「全カテゴリ」を先頭に追加
+        
+        # カテゴリリストの構築
         self.category_list = build_category_list(self.category_keywords)
-        self.current_category = "全カテゴリ"
-        # ログ設定（INFO以上、ファイル出力も有効化）
+        
+        # ログ設定
         log_dir = os.path.join(os.path.dirname(__file__), '..', 'logs')
         os.makedirs(log_dir, exist_ok=True)
         log_file = os.path.join(log_dir, 'app.log')
@@ -118,46 +179,12 @@ class TagManagerApp:
             ]
         )
         self.logger = logging.getLogger(__name__)
-        # lambdaをdef関数に置き換え
-        def select_tag_callback(tag: str) -> None:
-            self.select_tag_in_tree(tag)
-        self.select_tag_callback = select_tag_callback
-        def close_progress_dialog() -> None:
-            if hasattr(self, "progress_dialog"):
-                self.progress_dialog.close()
-        self.close_progress_dialog = close_progress_dialog
-        def set_progress_message(msg: str) -> None:
-            if hasattr(self, "progress_dialog"):
-                self.progress_dialog.set_message(msg)
-        self.set_progress_message = set_progress_message
-        def clear_status_var() -> None:
-            self.status_var.set("")
-        self.clear_status_var = clear_status_var
-        def show_context_menu_event(event: Any, t: Any) -> None:
-            self.show_context_menu(event, t)
-        self.show_context_menu_event = show_context_menu_event
-        def copy_selected_tags_command() -> None:
-            self.copy_selected_tags()
-        self.copy_selected_tags_command = copy_selected_tags_command
-        def set_category_from_menu_command(c: str) -> None:
-            self.set_category_from_menu(c)
-        self.set_category_from_menu_command = set_category_from_menu_command
-        def export_tags_command(tree: Any) -> None:
-            self.export_tags(tree)
-        self.export_tags_command = export_tags_command
-        def prompt_and_add_tags_negative() -> None:
-            self.prompt_and_add_tags(is_negative=True)
-        self.prompt_and_add_tags_negative = prompt_and_add_tags_negative
-        def apply_theme_command(name: str) -> None:
-            self.apply_theme(name)
-        self.apply_theme_command = apply_theme_command
-        def wm_delete_window_none() -> None:
-            pass
-        self.wm_delete_window_none = wm_delete_window_none
+        
+        # UI構築と初期化
         self.setup_ui()
         self.process_queue()
-        self.refresh_tabs()  # 初期データ読み込み
-        self.show_guide_on_startup()
+        self.refresh_tabs()
+        show_guide_on_startup(self)
 
     def load_categories(self) -> None:
         try:
@@ -169,7 +196,7 @@ class TagManagerApp:
             self.category_keywords = {}
 
     def load_prompt_structure_priorities(self) -> None:
-        self.category_priorities = {}
+        self.prompt_structure_priorities = {}
         try:
             file_path = os.path.join('resources', 'config', 'prompt_structure.json')
             with open(file_path, 'r', encoding='utf-8') as f:
@@ -179,9 +206,9 @@ class TagManagerApp:
                     priority = item.get('priority')
                     if category and priority is not None:
                         if category == "ネガティブプロンプト":
-                            self.category_priorities["ネガティブ"] = priority
+                            self.prompt_structure_priorities["ネガティブ"] = priority
                         else:
-                            self.category_priorities[category] = priority
+                            self.prompt_structure_priorities[category] = priority
         except FileNotFoundError:
             self.logger.warning(f"ファイルを読み込めませんでした: {file_path}")
         except json.JSONDecodeError as e:
@@ -211,19 +238,8 @@ class TagManagerApp:
             self.logger.error(f"カテゴリの説明文読み込み中にエラーが発生しました: {e}")
 
     def backup_db(self) -> None:
-        if not os.path.exists(DB_FILE):
-            messagebox.showerror("エラー", "データベースファイルが見つかりません。", parent=self.root)
-            return
-        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        backup_file = os.path.join('backup', f"tags_backup_{timestamp}.db")
-        try:
-            # バックアップディレクトリが存在しない場合は作成
-            os.makedirs('backup', exist_ok=True)
-            shutil.copy(DB_FILE, backup_file)
-            messagebox.showinfo("バックアップ完了", f"バックアップを作成しました：\n{backup_file}", parent=self.root)
-        except (IOError, shutil.Error) as e:
-            self.logger.error(f"バックアップに失敗しました: {e}")
-            messagebox.showerror("エラー", f"バックアップに失敗しました：{e}", parent=self.root)
+        """データベースバックアップ"""
+        backup_database(self)
 
     def setup_ui(self) -> None:
         self.trees = {}  # ← ここで必ず初期化
@@ -243,85 +259,64 @@ class TagManagerApp:
 
         file_menu = Menu(menubar, tearoff=0)
         menubar.add_cascade(label="ファイル", menu=file_menu)
-        file_menu.add_command(label="DBバックアップ", command=self.backup_db)
-        file_menu.add_separator()
         file_menu.add_command(label="終了", command=self.on_closing)
 
         # 編集メニュー
         edit_menu = Menu(menubar, tearoff=0)
         menubar.add_cascade(label="編集", menu=edit_menu)
-        edit_menu.add_command(label="元に戻す", command=self.dummy_undo)
-        edit_menu.add_command(label="やり直し", command=self.dummy_redo)
-        edit_menu.add_separator()
         edit_menu.add_command(label="コピー", command=self.copy_to_clipboard)
-        edit_menu.add_command(label="貼り付け", command=self.dummy_paste)
 
-        # テーマメニュー
-        theme_menu = Menu(menubar, tearoff=0)
-        menubar.add_cascade(label="テーマ", menu=theme_menu)
-        for theme_name in self.theme_manager.get_available_themes():
-            def make_theme_command(name: str) -> Callable[[], None]:
-                def cmd() -> None:
-                    self.apply_theme(name)
-                return cmd
-            theme_menu.add_command(label=theme_name, command=make_theme_command(theme_name))
+
 
         # ヘルプメニュー
         help_menu = Menu(menubar, tearoff=0)
         menubar.add_cascade(label="ヘルプ", menu=help_menu)
         help_menu.add_command(label="使い方", command=self.show_help)
         help_menu.add_command(label="バージョン情報", command=self.show_about)
+        help_menu.add_command(label="ライセンス情報", command=self.show_license_info)
 
         # 設定メニュー
         settings_menu = Menu(menubar, tearoff=0)
         menubar.add_cascade(label="設定", menu=settings_menu)
-        settings_menu.add_command(label="保存先の変更", command=self.dummy_settings)
-        settings_menu.add_command(label="言語切替", command=self.dummy_settings)
-        settings_menu.add_command(label="フォント/サイズ調整", command=self.dummy_settings)
-        settings_menu.add_command(label="自動保存ON/OFF", command=self.dummy_settings)
+        settings_menu.add_command(label="テーマ切替", command=self.show_theme_dialog)
+        settings_menu.add_command(label="データベースバックアップ", command=self.backup_db)
         settings_menu.add_separator()
-        settings_menu.add_command(label="AI予測設定", command=self.show_ai_settings_dialog)
-        settings_menu.add_command(label="カスタムキーワード管理", command=self.show_custom_keywords_dialog)
-        settings_menu.add_command(label="カスタムルール管理", command=self.show_custom_rules_dialog)
+        settings_menu.add_command(label="個人データエクスポート", command=self.export_personal_data)
+        settings_menu.add_command(label="個人データインポート", command=self.import_personal_data)
+
+        # AIメニュー
+        ai_menu = Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="AI", menu=ai_menu)
+        ai_menu.add_command(label="AI予測機能", command=self.show_ai_prediction_dialog)
+        ai_menu.add_command(label="AI学習データ可視化", command=self.show_ai_learning_data_dialog)
+        ai_menu.add_command(label="AI設定", command=self.show_ai_settings_dialog)
+        ai_menu.add_separator()
+        ai_menu.add_command(label="カスタムキーワード管理", command=self.show_custom_keywords_dialog)
+        ai_menu.add_command(label="カスタムルール管理", command=self.show_custom_rules_dialog)
+        ai_menu.add_separator()
+        ai_menu.add_command(label="未分類タグの一括整理", command=self.auto_assign_uncategorized_tags)
+        ai_menu.add_command(label="選択タグの自動割り当て", command=self.auto_assign_selected_tags)
+        ai_menu.add_separator()
+        ai_menu.add_command(label="低信頼度タグ管理", command=self.show_low_confidence_tags_dialog)
+        ai_menu.add_separator()
+        ai_menu.add_command(label="AIキャッシュクリア", command=self.clear_ai_cache)
+        ai_menu.add_command(label="AI機能について", command=self.show_ai_help)
 
         # ツールメニュー
         tools_menu = Menu(menubar, tearoff=0)
         menubar.add_cascade(label="ツール", menu=tools_menu)
-        tools_menu.add_command(label="重複タグの検出・削除", command=self.dummy_tools)
-        tools_menu.add_command(label="未分類タグの一括整理", command=self.auto_assign_uncategorized_tags)
-        tools_menu.add_command(label="AI予測機能", command=self.show_ai_prediction_dialog)
+        tools_menu.add_command(label="カテゴリ一括AI再分類", command=self.show_bulk_reassign_dialog)
         tools_menu.add_command(label="タグの一括インポート", command=self.import_tags_async)
         tools_menu.add_command(label="タグの一括エクスポート", command=self.export_all_tags)
-        tools_menu.add_command(label="データの初期化", command=self.dummy_tools)
-
-        # 表示メニュー
-        view_menu = Menu(menubar, tearoff=0)
-        menubar.add_cascade(label="表示", menu=view_menu)
-        view_menu.add_command(label="フォントサイズ変更", command=self.dummy_view)
-        view_menu.add_command(label="サイドバー表示/非表示", command=self.dummy_view)
-        view_menu.add_command(label="タグ一覧の並び順カスタマイズ", command=self.dummy_view)
 
         # ショートカット一覧
         menubar.add_command(label="ショートカット一覧", command=self.show_shortcuts)
 
-        # 最近使ったファイル/タグ
-        recent_menu = Menu(menubar, tearoff=0)
-        menubar.add_cascade(label="最近使った", menu=recent_menu)
-        recent_menu.add_command(label="最近使ったファイル", command=self.dummy_recent)
-        recent_menu.add_command(label="最近編集したタグ", command=self.dummy_recent)
 
-        # データ管理
-        data_menu = Menu(menubar, tearoff=0)
-        menubar.add_cascade(label="データ管理", menu=data_menu)
-        data_menu.add_command(label="CSVエクスポート", command=self.dummy_data)
-        data_menu.add_command(label="CSVインポート", command=self.dummy_data)
-        data_menu.add_command(label="バックアップの復元", command=self.dummy_data)
 
-        # フィードバック
-        menubar.add_command(label="フィードバック", command=self.dummy_feedback)
 
-        # アップデート確認
-        menubar.add_command(label="アップデート確認", command=self.dummy_update)
+
+
 
         # 進捗表示用ラベル（メニューバー右端に配置）
         self.menu_status_label = tk.Label(self.root, textvariable=self.status_var, anchor="e", font=("TkDefaultFont", 10), bg="#f0f0f0")
@@ -409,11 +404,48 @@ class TagManagerApp:
         self.output_scrollbar = tb.Scrollbar(self.output, orient="vertical", command=self.output.yview, bootstyle="round")
         self.output_scrollbar.pack(side=tb.RIGHT, fill=tb.Y)
         self.output.configure(yscrollcommand=self.output_scrollbar.set)
-        # 出力欄クリア・コピーをoutput_panel内に移動
+        # 出力欄クリア・コピー・翻訳をoutput_panel内に移動
         output_btn_frame = tb.Frame(self.output_panel)
         output_btn_frame.pack(fill=tb.X, pady=(2, 0), anchor="e")
         tb.Button(output_btn_frame, text="出力欄クリア", command=self.clear_output, bootstyle="light").pack(side=tb.LEFT, padx=(0, 2))
         tb.Button(output_btn_frame, text="コピー", command=self.copy_to_clipboard, bootstyle="primary").pack(side=tb.LEFT, padx=(0, 2))
+        tb.Button(output_btn_frame, text="翻訳", command=self.show_prompt_translator, bootstyle="info").pack(side=tb.LEFT, padx=(0, 2))
+
+        # 出力欄で直接入力した内容もタグ一覧に追加する
+        def on_output_focus_out(event=None):
+            text = self.output.get("1.0", tk.END).strip()
+            if not text:
+                return
+            tags = [t.strip() for t in text.replace("\n", ",").split(",") if t.strip()]
+            if not tags:
+                return
+            is_negative = (self.current_category == "ネガティブ")
+            # --- 新ダイアログでカテゴリ一括選択 ---
+            dlg = MultiTagCategoryAssignDialog(self.root, tags)
+            if not dlg.result:
+                return
+            added, skipped = 0, 0
+            for tag, categories in dlg.result.items():
+                # ネガティブの場合はカテゴリを空に
+                cats_to_add = ["ネガティブ"] if is_negative else categories
+                for cat in cats_to_add:
+                    if not self.tag_manager.tag_exists(tag, is_negative):
+                        self.tag_manager.add_tag(tag, is_negative, cat)
+                        added += 1
+                        # --- 学習データ記録 ---
+                        try:
+                            from modules.ai_predictor import get_ai_predictor
+                            ai_predictor = get_ai_predictor()
+                            ai_predictor.usage_tracker.record_tag_usage(tag, cat)
+                        except Exception:
+                            pass
+                    else:
+                        skipped += 1
+            if added > 0:
+                self.refresh_tabs()
+
+        self.output.bind("<FocusOut>", on_output_focus_out)
+        # --- 今後: オートコンプリート機能・日本語→英語変換フックをここに追加予定 ---
 
         # Weight Panel
         self.weight_panel = tb.LabelFrame(self.details_panel, text="重み付け", padding=2, bootstyle="info")
@@ -467,6 +499,106 @@ class TagManagerApp:
         # 初期カテゴリのタグ一覧を必ず表示
         self.refresh_tabs()
 
+        # --- オートコンプリート・日本語→英語変換サジェスト機能 ---
+        self.suggest_listbox = None
+        self.suggest_candidates = []
+        self.suggest_var = tk.StringVar()
+
+        def get_tag_candidates(prefix: str) -> List[str]:
+            """既存タグ（英語・日本語）から部分一致候補を返す"""
+            tags = self.tag_manager.get_all_tags()
+            candidates = set()
+            prefix_lower = prefix.lower()
+            for t in tags:
+                if t["tag"].lower().startswith(prefix_lower):
+                    candidates.add(t["tag"])
+                if t["jp"] and t["jp"].startswith(prefix):
+                    candidates.add(t["tag"])  # 日本語→英語逆引き
+            return sorted(candidates)
+
+        def ai_translate_jp_to_en(jp_text: str) -> List[str]:
+            """AI翻訳APIや既存関数で日本語→英語タグ候補を返す（ダミー実装）"""
+            # ここで本来はAI翻訳APIを呼び出す
+            # 例: from modules.prompt_translator import translate_prompt_to_en
+            # return translate_prompt_to_en(jp_text)
+            return [jp_text]  # ダミー: そのまま返す
+
+        def show_suggest_listbox(candidates: List[str], insert_pos: str):
+            if self.suggest_listbox:
+                self.suggest_listbox.destroy()
+            if not candidates:
+                return
+            self.suggest_listbox = tk.Listbox(self.output_panel, listvariable=self.suggest_var, height=min(8, len(candidates)), font=("TkDefaultFont", 10))
+            for c in candidates:
+                self.suggest_listbox.insert(tk.END, c)
+            self.suggest_listbox.place(x=5, y=5)  # TODO: カーソル位置に合わせて調整
+            self.suggest_listbox.lift()
+            self.suggest_listbox.bind("<ButtonRelease-1>", lambda e: complete_from_suggest())
+            self.suggest_listbox.bind("<Return>", lambda e: complete_from_suggest())
+
+        def hide_suggest_listbox():
+            if self.suggest_listbox:
+                self.suggest_listbox.destroy()
+                self.suggest_listbox = None
+
+        def complete_from_suggest():
+            if not self.suggest_listbox:
+                return
+            selection = self.suggest_listbox.curselection()
+            if not selection:
+                return
+            selected = self.suggest_listbox.get(selection[0])
+            # 現在のカーソル位置の単語を置換
+            idx = self.output.index(tk.INSERT)
+            text = self.output.get("1.0", tk.END)
+            before = text[:self.output.index(tk.INSERT).split(".")[1]]
+            after = text[self.output.index(tk.INSERT).split(".")[1]:]
+            # 直前のカンマや改行で区切る
+            line, col = map(int, idx.split("."))
+            line_text = self.output.get(f"{line}.0", f"{line}.end")
+            left = line_text[:col]
+            right = line_text[col:]
+            # 最後の区切り位置を探す
+            last_comma = left.rfind(",")
+            last_space = left.rfind(" ")
+            last_sep = max(last_comma, last_space)
+            if last_sep == -1:
+                new_left = ""
+            else:
+                new_left = left[:last_sep+1]
+            completed = new_left + selected + right
+            self.output.delete(f"{line}.0", f"{line}.end")
+            self.output.insert(f"{line}.0", completed)
+            hide_suggest_listbox()
+
+        def on_output_keyrelease(event=None):
+            # 入力中の単語を取得
+            idx = self.output.index(tk.INSERT)
+            line, col = map(int, idx.split("."))
+            line_text = self.output.get(f"{line}.0", f"{line}.end")
+            left = line_text[:col]
+            # 区切り文字で分割
+            if "," in left:
+                prefix = left.split(",")[-1].strip()
+            elif " " in left:
+                prefix = left.split(" ")[-1].strip()
+            else:
+                prefix = left.strip()
+            if not prefix:
+                hide_suggest_listbox()
+                return
+            # 英語・日本語両方でサジェスト
+            candidates = get_tag_candidates(prefix)
+            # 日本語で既存タグに該当しない場合はAI翻訳候補も追加
+            if not candidates and re.search(r'[ぁ-んァ-ン一-龥]', prefix):
+                candidates = ai_translate_jp_to_en(prefix)
+            show_suggest_listbox(candidates, idx)
+
+        self.output.bind("<KeyRelease>", on_output_keyrelease)
+        # サジェスト選択時の補完
+        # Listboxのイベントはshow_suggest_listbox内でバインド
+        # --- 既存のon_output_focus_outはそのまま維持 ---
+
     def on_closing(self) -> None:
         if messagebox.askokcancel("終了", "アプリケーションを終了しますか？"):
             self.tag_manager.close()
@@ -496,10 +628,13 @@ class TagManagerApp:
         tree.bind("<Button-3>", self.make_show_context_menu_event(tree))
 
     def refresh_tabs(self) -> None:
+        # 現在のツリーを表示
         self.show_current_tree()
+        # 検索テキストを取得
         filter_text = self.get_search_text().lower()
+        # 非同期でタグデータを取得
         threading.Thread(target=self.worker_thread_fetch, args=(self.q, filter_text, self.current_category), daemon=True).start()
-        # --- 全カテゴリ時は一括操作ボタンを無効化（カテゴリ一括変更と削除は除く） ---
+        # 全カテゴリ時は一括操作ボタンを無効化（カテゴリ一括変更と削除は除く）
         if hasattr(self, 'ops_panel'):
             for child in self.ops_panel.winfo_children():
                 if isinstance(child, tb.Button):
@@ -552,6 +687,17 @@ class TagManagerApp:
         if not self.tag_manager.update_tag(old_tag, tag_new, jp_new, cat_new, is_negative):
             messagebox.showerror("エラー", "その英語タグは既に存在します。", parent=self.root)
             return
+        
+        # AI学習: カテゴリ変更を記録
+        if old_tag != tag_new or cat_new:  # タグ名またはカテゴリが変更された場合
+            try:
+                from modules.ai_predictor import get_ai_predictor
+                ai_predictor = get_ai_predictor()
+                ai_predictor.usage_tracker.record_tag_usage(tag_new, cat_new)
+            except Exception as e:
+                # AI学習エラーは無視（UI操作を継続）
+                pass
+        
         self.refresh_tabs()
         def delayed_select_edit() -> None:
             self.select_tag_callback(tag_new)
@@ -603,10 +749,15 @@ class TagManagerApp:
         selected_index = self.listbox_cat.curselection()
         if selected_index:
             self.current_category = self.category_list[selected_index[0]]
+            # 現在のツリーを表示
             self.show_current_tree()
+            # タブを更新
             self.refresh_tabs()
+            # 編集パネルをクリア
             self.clear_edit_panel()
+            # 重み選択をクリア
             self.clear_weight_selection()
+            # カテゴリ説明を更新
             description = self.category_descriptions.get(self.current_category, "説明はありません。")
             self.category_description_label.config(text=description)
 
@@ -622,132 +773,35 @@ class TagManagerApp:
             tag_text = tree.item(item, "values")[0]
             if self.tag_manager.set_category(tag_text, category):
                 changed = True
+                # AI学習: カテゴリ変更を記録
+                try:
+                    from modules.ai_predictor import get_ai_predictor
+                    ai_predictor = get_ai_predictor()
+                    ai_predictor.usage_tracker.record_tag_usage(tag_text, category)
+                except Exception as e:
+                    # AI学習エラーは無視（UI操作を継続）
+                    pass
         if changed:
             self.refresh_tabs()
 
     # --- 編集・ヘルプ用のダミー関数 ---
-    def dummy_undo(self) -> None:
-        """
-        元に戻す操作のダミー関数。
-        失敗時はlogger.errorで記録し、必要に応じてmessagebox.showerrorで通知。
-        戻り値なし。
-        """
-        try:
-            messagebox.showinfo("元に戻す", "この機能はまだ実装されていません。", parent=self.root)
-        except Exception as e:
-            self.logger.error(f"dummy_undoエラー: {e}")
 
-    def dummy_redo(self) -> None:
-        """
-        やり直し操作のダミー関数。
-        失敗時はlogger.errorで記録し、必要に応じてmessagebox.showerrorで通知。
-        戻り値なし。
-        """
-        try:
-            messagebox.showinfo("やり直し", "この機能はまだ実装されていません。", parent=self.root)
-        except Exception as e:
-            self.logger.error(f"dummy_redoエラー: {e}")
-
-    def dummy_paste(self) -> None:
-        """
-        貼り付け操作のダミー関数。
-        失敗時はlogger.errorで記録し、必要に応じてmessagebox.showerrorで通知。
-        戻り値なし。
-        """
-        try:
-            messagebox.showinfo("貼り付け", "この機能はまだ実装されていません。", parent=self.root)
-        except Exception as e:
-            self.logger.error(f"dummy_pasteエラー: {e}")
 
     def show_help(self) -> None:
-        help_text = (
-            "【タグ管理ツール 使い方ガイド】\n\n"
-            "■ 基本操作\n"
-            "・タグの追加：\n"
-            "　- 画面上部の『タグ追加』ボタンから、カンマ区切りで英語タグを入力し追加できます。\n"
-            "　- 『ネガティブ追加』ボタンでネガティブプロンプト用タグも追加可能です。\n\n"
-            "・タグの編集：\n"
-            "　- タグ一覧から編集したいタグを選択し、右側の編集パネルで内容を修正し『保存』を押します。\n"
-            "　- 英語タグ、日本語訳、カテゴリを個別に編集できます。\n\n"
-            "・カテゴリの切替・管理：\n"
-            "　- 左側リストでカテゴリを選択すると、そのカテゴリのタグが表示されます。\n"
-            "　- タグを複数選択し『カテゴリ一括変更』でまとめてカテゴリを変更できます。\n"
-            "　- 『未分類』カテゴリはカテゴリ未設定のタグが表示されます。\n\n"
-            "・お気に入り・削除：\n"
-            "　- タグを選択し『★お気に入り切替』でお気に入り登録/解除ができます。\n"
-            "　- 『削除』ボタンで選択したタグを削除します。\n\n"
-            "・出力・コピー：\n"
-            "　- タグをダブルクリックまたは選択して右下の出力欄に追加できます。\n"
-            "　- 『コピー』ボタンで出力欄の内容をクリップボードにコピーできます。\n"
-            "　- 『出力欄クリア』で出力内容をリセットします。\n\n"
-            "・重み付け機能：\n"
-            "　- タグに重み（強調度）を設定し、プロンプト出力に反映できます。\n"
-            "　- スライダーで数値を調整し『重み付きで出力に追加』で反映。\n\n"
-            "・自動並び替え機能：\n"
-            "　- 『自動並び替え』チェックボックスをONにすると、出力欄のタグがカテゴリの優先度順に自動で並び替えられます。\n"
-            "　- タグの重要度や出力順を意識したプロンプト作成が簡単になります。\n\n"
-            "・テーマ切替：\n"
-            "　- メニューバーの『テーマ』からUIテーマ（ダーク/ライト等）を変更できます。\n\n"
-            "・バックアップ：\n"
-            "　- 『ファイル』→『DBバックアップ』でデータベースのバックアップが作成できます。\n\n"
-            "■ ショートカット・便利機能\n"
-            "・タグ一覧で複数選択：CtrlまたはShiftキーを押しながらクリック\n"
-            "・右クリック：タグ一覧で右クリックするとコンテキストメニューが表示されます。\n"
-            "・カテゴリ変更やエクスポートも右クリックから可能です。\n\n"
-            "■ 注意事項\n"
-            "・タグやカテゴリの編集・削除は元に戻せません。\n"
-            "・DBバックアップは定期的に取得することを推奨します。\n"
-            "・設定やデータファイルはresources/config/配下に保存されています。\n\n"
-            "■ その他\n"
-            "・README.mdやヘルプメニューもご参照ください。\n"
-        )
-        messagebox.showinfo("使い方", help_text, parent=self.root)
+        """ヘルプダイアログを表示"""
+        show_help_dialog(self.root)
 
     def show_about(self) -> None:
-        about_text = (
-            "タグ管理ツール v1.0\n"
-            "\n"
-            "開発者: 芋野斧子\n"
-            "Twitter: @im_onoko"
-        )
-        messagebox.showinfo("バージョン情報", about_text, parent=self.root)
+        """バージョン情報ダイアログを表示"""
+        show_about_dialog(self.root)
 
-    # --- ダミー関数群 ---
-    def dummy_settings(self) -> None:
-        messagebox.showinfo("設定", "この機能はまだ実装されていません。", parent=self.root)
-
-    def dummy_tools(self) -> None:
-        messagebox.showinfo("ツール", "この機能はまだ実装されていません。", parent=self.root)
-
-    def dummy_view(self) -> None:
-        messagebox.showinfo("表示", "この機能はまだ実装されていません。", parent=self.root)
+    def show_license_info(self) -> None:
+        """ライセンス情報ダイアログを表示"""
+        show_license_info_dialog(self.root)
 
     def show_shortcuts(self) -> None:
-        shortcut_text = (
-            "【ショートカット一覧】\n\n"
-            "・Ctrl+C：コピー\n"
-            "・Ctrl+V：貼り付け\n"
-            "・Ctrl+Z：元に戻す\n"
-            "・Ctrl+Y：やり直し\n"
-            "・Ctrl+A：全選択\n"
-            "・Ctrl+S：保存\n"
-            "・Ctrl+F：検索\n"
-            "・Ctrl+クリック/Shift+クリック：複数選択\n"
-            "・F1：ヘルプ\n"
-        )
-        messagebox.showinfo("ショートカット一覧", shortcut_text, parent=self.root)
-
-    def dummy_recent(self) -> None:
-        messagebox.showinfo("最近使った", "この機能はまだ実装されていません。", parent=self.root)
-
-    def dummy_data(self) -> None:
-        messagebox.showinfo("データ管理", "この機能はまだ実装されていません。", parent=self.root)
-
-    def dummy_feedback(self) -> None:
-        messagebox.showinfo("フィードバック", "この機能はまだ実装されていません。", parent=self.root)
-
-    def dummy_update(self) -> None:
-        messagebox.showinfo("アップデート確認", "この機能はまだ実装されていません。", parent=self.root)
+        """ショートカット一覧ダイアログを表示"""
+        show_shortcuts_dialog(self.root)
 
     def process_queue(self) -> None:
         try:
@@ -783,9 +837,131 @@ class TagManagerApp:
         if not text:
             messagebox.showinfo("コピー", "コピーするテキストがありません。", parent=self.root)
             return
+        
+        # プロンプトからタグを抽出
+        tags = self._extract_tags_from_prompt(text)
+        
+        # クリップボードにコピー
         self.root.clipboard_clear()
         self.root.clipboard_append(text)
-        messagebox.showinfo("コピー完了", "プロンプトをコピーしました", parent=self.root) 
+        
+        # タグが抽出できた場合は保存確認ダイアログを表示
+        if tags:
+            self._show_save_tags_dialog(tags)
+        else:
+            messagebox.showinfo("コピー完了", "プロンプトをコピーしました", parent=self.root)
+    
+    def _extract_tags_from_prompt(self, prompt_text: str) -> List[str]:
+        """プロンプトテキストからタグを抽出する"""
+        tags = []
+        lines = prompt_text.split('\n')
+        for line in lines:
+            line = line.strip()
+            if line:
+                # カンマ区切りでタグを分割
+                parts = [part.strip() for part in line.split(',')]
+                for part in parts:
+                    # 重み付けを除去（例: "tag (1.2)" -> "tag"）
+                    if '(' in part and ')' in part:
+                        part = part.split('(')[0].strip()
+                    if part and len(part) > 0:
+                        tags.append(part)
+        return tags
+    
+    def _show_save_tags_dialog(self, tags: List[str]) -> None:
+        """タグ保存確認ダイアログを表示する"""
+        # 既存のタグをチェック
+        existing_tags = []
+        new_tags = []
+        
+        for tag in tags:
+            if self.tag_manager.tag_exists(tag, False) or self.tag_manager.tag_exists(tag, True):
+                existing_tags.append(tag)
+            else:
+                new_tags.append(tag)
+        
+        # ダイアログメッセージを作成
+        message = "プロンプトをコピーしました。\n\n"
+        if new_tags:
+            message += f"新規タグ ({len(new_tags)}個):\n"
+            for tag in new_tags[:10]:  # 最初の10個のみ表示
+                message += f"  • {tag}\n"
+            if len(new_tags) > 10:
+                message += f"  ... 他 {len(new_tags) - 10}個\n"
+            message += "\n"
+        
+        if existing_tags:
+            message += f"既存タグ ({len(existing_tags)}個):\n"
+            for tag in existing_tags[:5]:  # 最初の5個のみ表示
+                message += f"  • {tag}\n"
+            if len(existing_tags) > 5:
+                message += f"  ... 他 {len(existing_tags) - 5}個\n"
+            message += "\n"
+        
+        if new_tags:
+            message += "これらのタグをタグ一覧に保存しますか？"
+            
+            result = messagebox.askyesno(
+                "タグ保存確認", 
+                message, 
+                parent=self.root
+            )
+            
+            if result:
+                # タグを保存
+                self._save_extracted_tags(new_tags)
+        else:
+            message += "全てのタグは既に保存済みです。"
+            messagebox.showinfo("コピー完了", message, parent=self.root)
+    
+    def _save_extracted_tags(self, tags: List[str]) -> None:
+        """抽出されたタグをタグ一覧に保存する"""
+        try:
+            # プログレスダイアログを表示
+            progress_dialog = ProgressDialog(
+                self.root, 
+                "タグ保存中", 
+                f"{len(tags)}個のタグを保存中..."
+            )
+            
+            def save_worker():
+                saved_count = 0
+                for i, tag in enumerate(tags):
+                    # プログレス更新
+                    progress_dialog.set_message(f"タグを保存中... ({i+1}/{len(tags)})")
+                    
+                    # タグを保存（通常タグとして）
+                    if self.tag_manager.add_tag(tag, False, ""):
+                        saved_count += 1
+                    
+                    # UI更新のため少し待機
+                    time.sleep(0.01)
+                
+                # 完了メッセージ
+                def show_completion():
+                    progress_dialog.close()
+                    messagebox.showinfo(
+                        "保存完了", 
+                        f"{saved_count}個のタグをタグ一覧に保存しました。", 
+                        parent=self.root
+                    )
+                    # タブを更新
+                    self.refresh_tabs()
+                
+                self.root.after(0, show_completion)
+            
+            # ワーカースレッドを開始
+            import threading
+            thread = threading.Thread(target=save_worker)
+            thread.daemon = True
+            thread.start()
+            
+        except Exception as e:
+            messagebox.showerror(
+                "エラー", 
+                f"タグの保存中にエラーが発生しました:\n{e}", 
+                parent=self.root
+            ) 
 
     def clear_output(self) -> None:
         self.output.delete("1.0", tk.END)
@@ -876,8 +1052,18 @@ class TagManagerApp:
         if dialog.result and dialog.result['action'] == 'change':
             to_category = dialog.result['to_category']
             if self.tag_manager.bulk_assign_category(selected_tags_text, to_category if to_category != "未分類" else ""):
+                # AI学習: 一括カテゴリ変更を記録
+                try:
+                    from modules.ai_predictor import get_ai_predictor
+                    ai_predictor = get_ai_predictor()
+                    for tag in selected_tags_text:
+                        ai_predictor.usage_tracker.record_tag_usage(tag, to_category if to_category != "未分類" else "")
+                except Exception as e:
+                    # AI学習エラーは無視（UI操作を継続）
+                    pass
+                
                 self.refresh_tabs()
-                messagebox.showinfo("完了", f"選択した{len(selected_tags_text)}個のタグのカテゴリを変更しました。", parent=self.root) 
+                messagebox.showinfo("完了", f"選択した{len(selected_tags_text)}個のタグのカテゴリを変更しました。", parent=self.root)
 
     def prompt_and_add_tags(self, is_negative: bool = False) -> None:
         title = "ネガティブタグ追加" if is_negative else "タグ追加"
@@ -906,6 +1092,15 @@ class TagManagerApp:
                     if self.tag_manager.add_tag(tag, is_negative, category):
                         added_count += 1
                         self.newly_added_tags.append(tag)
+                        # AI学習: 新規追加されたタグのカテゴリを記録
+                        if category and not is_negative:
+                            try:
+                                from modules.ai_predictor import get_ai_predictor
+                                ai_predictor = get_ai_predictor()
+                                ai_predictor.usage_tracker.record_tag_usage(tag, category)
+                            except Exception as e:
+                                # AI学習エラーは無視（UI操作を継続）
+                                pass
                     self.tag_manager.translate_and_update_tag(tag, is_negative)
             # 追加完了後に一度だけリフレッシュ
             self.q.put({"type": "refresh"})
@@ -968,6 +1163,7 @@ class TagManagerApp:
             self.q.put({"type": "status", "message": "準備完了"})
 
     def export_tags(self, tree: Any) -> None:
+        """タグエクスポート"""
         selected = tree.selection()
         tags_to_export = []
         is_negative = (self.current_category == "ネガティブ")
@@ -998,18 +1194,11 @@ class TagManagerApp:
                 messagebox.showerror("エラー", f"エクスポートに失敗しました:\n{e}", parent=self.root)
 
     def export_all_tags(self) -> None:
-        file_path = filedialog.asksaveasfilename(title="全タグをエクスポート", defaultextension=".json",
-                                               filetypes=[("JSONファイル", "*.json"), ("すべてのファイル", "*.* ")], parent=self.root)
-        if file_path:
-            try:
-                if self.tag_manager.export_all_tags_to_json(file_path):
-                    tags = self.tag_manager.get_all_tags()
-                    messagebox.showinfo("エクスポート完了", f"{len(tags)}個の全タグをエクスポートしました:\n{file_path}", parent=self.root)
-            except IOError as e:
-                self.logger.error(f"全タグのエクスポートに失敗しました: {e}")
-                messagebox.showerror("エラー", f"エクスポートに失敗しました:\n{e}", parent=self.root) 
+        """全タグエクスポート"""
+        export_all_tags(self)
 
     def show_current_tree(self) -> None:
+        """現在選択されているカテゴリのツリーを表示"""
         for cat, tree in self.trees.items():
             tree_frame = tree.master
             if cat == self.current_category:
@@ -1018,10 +1207,11 @@ class TagManagerApp:
                 tree_frame.pack_forget()
 
     def filter_tags_optimized(self, tags: List[Dict[str, Any]], filter_text: str, category: str) -> List[Dict[str, Any]]:
-        # 検索語でタグ名・カテゴリ・日本語訳・お気に入りを横断的にフィルタ
+        """検索語でタグ名・カテゴリ・日本語訳・お気に入りを横断的にフィルタ"""
         filter_text = filter_text.lower().strip()
         if not filter_text or filter_text in ("タグ名・カテゴリ・日本語訳・お気に入りで検索…", ""):
             return [t for t in tags if (category=="全カテゴリ" or t["category"]==category or category=="お気に入り" and t["favorite"])]
+        
         def match(t: Dict[str, Any]) -> bool:
             return (
                 filter_text in t["tag"].lower()
@@ -1029,29 +1219,36 @@ class TagManagerApp:
                 or filter_text in t.get("category", "").lower()
                 or (filter_text in ("fav", "favorite", "お気に入り") and t.get("favorite", False))
             )
+        
         # 検索テキストがある場合は、まず検索でフィルタしてからカテゴリでフィルタ
         filtered_by_search = [t for t in tags if match(t)]
         return [t for t in filtered_by_search if (category=="全カテゴリ" or t["category"]==category or category=="お気に入り" and t["favorite"])]
 
     def sort_prompt_by_priority(self, tags_data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """プロンプト構造の優先度に基づいてタグをソート"""
         if not tags_data:
             return []
+        
         all_tags_info = self.tag_manager.get_all_tags()
         tag_info_map = {t["tag"]: t for t in all_tags_info}
         tags_with_priority = []
+        
         for item in tags_data:
             tag = item["tag"]
             weight = item["weight"]
             info = tag_info_map.get(tag)
             category = info.get("category", "") if info else ""
-            priority = self.category_priorities.get(category, 999)
+            priority = self.prompt_structure_priorities.get(category, 999)
             tags_with_priority.append({"tag": tag, "weight": weight, "priority": priority})
+        
         def get_priority(item: Dict[str, Any]) -> int:
             return item["priority"]
+        
         sorted_tags_with_priority = sorted(tags_with_priority, key=get_priority)
-        return sorted_tags_with_priority 
+        return sorted_tags_with_priority
 
     def _format_output_text(self, tags_data: List[Dict[str, Any]]) -> str:
+        """タグデータをプロンプト形式のテキストに変換"""
         parts = []
         for item in tags_data:
             tag = item["tag"]
@@ -1060,9 +1257,10 @@ class TagManagerApp:
                 parts.append(tag)
             else:
                 parts.append(f"({tag}:{weight:.1f})")
-        return ", ".join(parts) 
+        return ", ".join(parts)
 
     def _strip_weight_from_tag(self, tag: str) -> List[str]:
+        """タグから重みを除去してタグ名のみを取得"""
         if tag.startswith("(") and tag.endswith("(") and ":" in tag:
             content_inside_paren = tag[1:-1]
             parts = content_inside_paren.split(":")
@@ -1075,6 +1273,7 @@ class TagManagerApp:
         return [tag.strip()]
 
     def _is_float(self, value: str) -> bool:
+        """文字列が浮動小数点数かどうかを判定"""
         try:
             float(value)
             return True
@@ -1116,8 +1315,11 @@ class TagManagerApp:
         self.refresh_weight_output()
 
     def worker_thread_fetch(self, q: queue.Queue[Any], filter_text: str, category_to_fetch: str) -> None:
+        """非同期でタグデータを取得"""
         try:
             q.put({"type": "status", "message": f"{category_to_fetch}カテゴリのタグを読み込み中..."})
+            
+            # カテゴリに応じてタグを取得
             if category_to_fetch == "最近使った":
                 tags = self.tag_manager.get_recent_tags()
             elif category_to_fetch == "ネガティブ":
@@ -1128,10 +1330,17 @@ class TagManagerApp:
                 tags = self.tag_manager.get_all_tags()
             else:
                 tags = self.tag_manager.positive_tags
+            
+            # フィルタリング
             filtered_tags = self.filter_tags_optimized(tags, filter_text, category_to_fetch)
+            
+            # アイテム形式に変換
             items = [(t["tag"], t["jp"], "★" if t.get("favorite") else "", t.get("category", "")) for t in filtered_tags]
+            
+            # キューに結果を送信
             q.put({"type": "update_tree", "items": items, "category": category_to_fetch})
             q.put({"type": "status", "message": "準備完了"})
+            
         except Exception as e:
             q.put({"type": "error", "title": "タグ取得エラー", "message": f"タグ取得中にエラーが発生しました: {e}"})
             q.put({"type": "status", "message": "準備完了"})
@@ -1153,6 +1362,96 @@ class TagManagerApp:
         self.entry_category.insert(0, category_text)
         self.selected_tags = [tree.item(item, "values")[0] for item in selected]
         self.update_weight_selection() 
+
+    def show_theme_dialog(self) -> None:
+        """
+        テーマ選択ダイアログを表示する
+        """
+        theme_dialog = Toplevel(self.root)
+        theme_dialog.title("テーマ選択")
+        theme_dialog.geometry("400x500")
+        theme_dialog.transient(self.root)
+        theme_dialog.grab_set()
+        theme_dialog.resizable(False, False)
+        
+        # メインフレーム
+        main_frame = tb.Frame(theme_dialog, padding=10)
+        main_frame.pack(fill=tb.BOTH, expand=True)
+        
+        # タイトル
+        title_label = tb.Label(main_frame, text="テーマを選択してください", font=("TkDefaultFont", 14, "bold"))
+        title_label.pack(pady=(0, 20))
+        
+        # 現在のテーマ表示
+        current_theme = self.theme_manager.current_theme
+        current_label = tb.Label(main_frame, text=f"現在のテーマ: {current_theme}", font=("TkDefaultFont", 10))
+        current_label.pack(pady=(0, 10))
+        
+        # テーマリストフレーム
+        list_frame = tb.Frame(main_frame)
+        list_frame.pack(fill=tb.BOTH, expand=True, pady=(0, 10))
+        
+        # スクロール可能なリストボックス
+        listbox_frame = tb.Frame(list_frame)
+        listbox_frame.pack(fill=tb.BOTH, expand=True)
+        
+        scrollbar = tk.Scrollbar(listbox_frame)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        
+        theme_listbox = tk.Listbox(listbox_frame, yscrollcommand=scrollbar.set, font=("TkDefaultFont", 10))
+        theme_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar.config(command=theme_listbox.yview)
+        
+        # 利用可能なテーマをリストボックスに追加
+        available_themes = self.theme_manager.get_available_themes()
+        for theme in available_themes:
+            theme_listbox.insert(tk.END, theme)
+            if theme == current_theme:
+                theme_listbox.selection_set(tk.END)
+        
+        # プレビューフレーム
+        preview_frame = tb.LabelFrame(main_frame, text="プレビュー", padding=5)
+        preview_frame.pack(fill=tb.X, pady=(0, 10))
+        
+        preview_label = tb.Label(preview_frame, text="選択したテーマのプレビューがここに表示されます", 
+                               wraplength=350, justify=tk.LEFT)
+        preview_label.pack()
+        
+        def update_preview(*args):
+            selection = theme_listbox.curselection()
+            if selection:
+                selected_theme = theme_listbox.get(selection[0])
+                preview_label.config(text=f"テーマ: {selected_theme}\n\nこのテーマを適用すると、アプリケーション全体の見た目が変更されます。")
+        
+        theme_listbox.bind('<<ListboxSelect>>', update_preview)
+        
+        # ボタンフレーム
+        button_frame = tb.Frame(main_frame)
+        button_frame.pack(fill=tb.X, pady=(10, 0))
+        
+        def apply_selected_theme():
+            selection = theme_listbox.curselection()
+            if selection:
+                selected_theme = theme_listbox.get(selection[0])
+                self.apply_theme(selected_theme)
+                theme_dialog.destroy()
+        
+        def cancel():
+            theme_dialog.destroy()
+        
+        # ボタン
+        tb.Button(button_frame, text="適用", command=apply_selected_theme, 
+                 bootstyle="primary").pack(side=tk.RIGHT, padx=(5, 0))
+        tb.Button(button_frame, text="キャンセル", command=cancel).pack(side=tk.RIGHT)
+        
+        # 初期プレビューを表示
+        update_preview()
+        
+        # ダイアログを中央に配置
+        theme_dialog.update_idletasks()
+        x = (theme_dialog.winfo_screenwidth() // 2) - (theme_dialog.winfo_width() // 2)
+        y = (theme_dialog.winfo_screenheight() // 2) - (theme_dialog.winfo_height() // 2)
+        theme_dialog.geometry(f"+{x}+{y}")
 
     def apply_theme(self, theme_name: str) -> None:
         self.theme_manager.set_theme(theme_name)
@@ -1200,6 +1499,7 @@ class TagManagerApp:
     def add_tag_for_test(self, tag: str, is_negative: bool = False, category: str = "") -> bool:
         """
         テスト用: タグ追加のUIロジックを直接呼び出す（バリデーション・DB登録・翻訳も実行）
+        テストタグはAI学習履歴に記録されません
         """
         if self.tag_manager.add_tag(tag, is_negative, category):
             self.tag_manager.translate_and_update_tag(tag, is_negative)
@@ -1211,14 +1511,18 @@ class TagManagerApp:
 
     
     def show_guide_on_startup(self) -> None:
+        """初回起動時のガイドを表示"""
+        # 初回起動時のみ表示する場合は、設定ファイルで管理
         pass
 
     def clear_search(self) -> None:
+        """検索をクリア"""
         if hasattr(self, 'entry_search'):
             self.entry_search.delete(0, tk.END)
         self.refresh_tabs()
 
     def get_search_text(self) -> str:
+        """検索テキストを取得"""
         if hasattr(self, 'entry_search'):
             val = self.entry_search.get()
             if val == "タグ検索…":
@@ -1318,9 +1622,16 @@ class TagManagerApp:
                             })
                             
                             if assigned_category != "未分類":
-                                # カテゴリを更新
                                 if self.tag_manager.set_category(tag_name, assigned_category):
                                     assigned_count += 1
+                                    # AI学習: 自動割り当てされたカテゴリを記録
+                                    try:
+                                        from modules.ai_predictor import get_ai_predictor
+                                        ai_predictor = get_ai_predictor()
+                                        ai_predictor.usage_tracker.record_tag_usage(tag_name, assigned_category)
+                                    except Exception as e:
+                                        # AI学習エラーは無視（UI操作を継続）
+                                        pass
                                 else:
                                     skipped_count += 1
                             else:
@@ -1433,142 +1744,106 @@ class TagManagerApp:
         """
         詳細な割り当て結果を表示するダイアログ（AI予測統合版）
         """
-        # 結果ダイアログを作成
         result_dialog = Toplevel(self.root)
         result_dialog.title("カテゴリ自動割り当て結果（AI予測統合版）")
         result_dialog.geometry("1200x800")
         result_dialog.transient(self.root)
-        result_dialog.grab_set()
-        result_dialog.resizable(True, True)
-        
-        # メインフレーム
-        main_frame = tb.Frame(result_dialog, padding=10)
-        main_frame.pack(fill=tb.BOTH, expand=True)
-        
-        # サマリーテキスト
-        summary_label = tk.Label(main_frame, text=summary_text, font=("TkDefaultFont", 10), justify=tk.LEFT)
-        summary_label.pack(anchor=tk.W, pady=(0, 10))
-        
-        # 詳細結果のTreeview
-        tree_frame = tb.Frame(main_frame)
-        tree_frame.pack(fill=tb.BOTH, expand=True)
-        
-        # 新しいカラム構成（AI予測機能に対応）
-        columns = (
-            "タグ", "割り当てカテゴリ", "予測方法", "信頼度", "AIスコア", 
-            "キーワードスコア", "コンテキストブースト", "動的重み", 
-            "使用頻度", "最終使用", "理由"
+
+        # サマリ表示
+        summary_label = tk.Label(result_dialog, text=summary_text, anchor="w", justify="left", font=("TkDefaultFont", 12))
+        summary_label.pack(fill=tk.X, padx=10, pady=10)
+
+        # スクロール可能なフレーム
+        frame = tk.Frame(result_dialog)
+        frame.pack(fill=tk.BOTH, expand=True)
+        canvas = tk.Canvas(frame)
+        scrollbar = tk.Scrollbar(frame, orient="vertical", command=canvas.yview)
+        scrollable_frame = tk.Frame(canvas)
+        scrollable_frame.bind(
+            "<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
         )
-        
-        tree = ttk.Treeview(tree_frame, columns=columns, show="headings", height=20)
-        
-        # カラムの設定
-        column_widths = {
-            "タグ": 150,
-            "割り当てカテゴリ": 120,
-            "予測方法": 150,
-            "信頼度": 80,
-            "AIスコア": 80,
-            "キーワードスコア": 100,
-            "コンテキストブースト": 120,
-            "動的重み": 80,
-            "使用頻度": 80,
-            "最終使用": 100,
-            "理由": 200
-        }
-        
-        for col in columns:
-            tree.heading(col, text=col)
-            tree.column(col, width=column_widths.get(col, 100))
-        
-        # スクロールバー
-        scrollbar_y = tb.Scrollbar(tree_frame, orient=tk.VERTICAL, command=tree.yview)
-        scrollbar_x = tb.Scrollbar(tree_frame, orient=tk.HORIZONTAL, command=tree.xview)
-        tree.configure(yscrollcommand=scrollbar_y.set, xscrollcommand=scrollbar_x.set)
-        
-        # レイアウト
-        tree.grid(row=0, column=0, sticky="nsew")
-        scrollbar_y.grid(row=0, column=1, sticky="ns")
-        scrollbar_x.grid(row=1, column=0, sticky="ew")
-        tree_frame.grid_rowconfigure(0, weight=1)
-        tree_frame.grid_columnconfigure(0, weight=1)
-        
-        # データを挿入
-        for result in detailed_results:
-            tree.insert("", tk.END, values=(
-                result.get("tag", ""),
-                result.get("assigned_category", ""),
-                result.get("prediction_method", ""),
-                f"{result.get('confidence', 0):.1f}%" if result.get('confidence', 0) > 0 else "N/A",
-                f"{result.get('ai_score', 0):.2f}" if result.get('ai_score', 0) > 0 else "N/A",
-                result.get("keyword_score", 0),
-                result.get("context_boost", 0),
-                f"{result.get('dynamic_weight', 0):.2f}" if result.get('dynamic_weight', 0) > 0 else "N/A",
-                result.get("usage_frequency", 0),
-                result.get("last_used", "不明"),
-                result.get("reason", "")[:50] + "..." if len(result.get("reason", "")) > 50 else result.get("reason", "")
-            ))
-        
-        # ボタンフレーム
-        button_frame = tb.Frame(main_frame)
-        button_frame.pack(fill=tb.X, pady=(10, 0))
-        
-        def save_results() -> None:
-            """結果をファイルに保存"""
-            try:
-                timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-                filename = f"カテゴリ自動割り当て結果_{timestamp}.txt"
-                
-                file_path = filedialog.asksaveasfilename(
-                    defaultextension=".txt",
-                    filetypes=[("テキストファイル", "*.txt"), ("すべてのファイル", "*.*")],
-                    title="結果を保存"
-                )
-                
-                if file_path:
-                    with open(file_path, 'w', encoding='utf-8') as f:
-                        f.write("=== カテゴリ自動割り当て結果（AI予測統合版） ===\n")
-                        f.write(f"実行日時: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
-                        f.write(summary_text + "\n\n")
-                        f.write("=== 詳細結果 ===\n\n")
-                        
-                        # ヘッダー
-                        f.write("タグ\t割り当てカテゴリ\t予測方法\t信頼度\tAIスコア\tキーワードスコア\tコンテキストブースト\t動的重み\t使用頻度\t最終使用\t理由\n")
-                        
-                        # データ
-                        for result in detailed_results:
-                            f.write(f"{result.get('tag', '')}\t")
-                            f.write(f"{result.get('assigned_category', '')}\t")
-                            f.write(f"{result.get('prediction_method', '')}\t")
-                            f.write(f"{result.get('confidence', 0):.1f}%\t")
-                            f.write(f"{result.get('ai_score', 0):.2f}\t")
-                            f.write(f"{result.get('keyword_score', 0)}\t")
-                            f.write(f"{result.get('context_boost', 0)}\t")
-                            f.write(f"{result.get('dynamic_weight', 0):.2f}\t")
-                            f.write(f"{result.get('usage_frequency', 0)}\t")
-                            f.write(f"{result.get('last_used', '不明')}\t")
-                            f.write(f"{result.get('reason', '')}\n")
-                    
-                    messagebox.showinfo("保存完了", f"結果を保存しました:\n{file_path}")
-            except Exception as e:
-                messagebox.showerror("保存エラー", f"ファイル保存中にエラーが発生しました: {str(e)}")
-        
-        def refresh_tags() -> None:
-            """タグ一覧を更新"""
-            try:
-                self.refresh_tabs()
-                messagebox.showinfo("更新完了", "タグ一覧を更新しました。")
-            except Exception as e:
-                messagebox.showerror("更新エラー", f"タグ一覧の更新中にエラーが発生しました: {str(e)}")
-        
-        # ボタン
-        tb.Button(button_frame, text="結果を保存", command=save_results, bootstyle="primary").pack(side=tk.LEFT, padx=(0, 10))
-        tb.Button(button_frame, text="タグ一覧更新", command=refresh_tags, bootstyle="info").pack(side=tk.LEFT, padx=(0, 10))
-        tb.Button(button_frame, text="閉じる", command=result_dialog.destroy, bootstyle="secondary").pack(side=tk.RIGHT)
+        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+
+        # ヘッダー
+        header = ["タグ", "割り当てカテゴリ", "AI候補カテゴリ(信頼度)", "理由", "再割り当て"]
+        for i, h in enumerate(header):
+            tk.Label(scrollable_frame, text=h, font=("TkDefaultFont", 10, "bold"), borderwidth=1, relief="solid").grid(row=0, column=i, sticky="nsew", padx=1, pady=1)
+
+        # 各タグごとに行を追加
+        row_vars = []  # (tag, var, row) のリスト
+        for row, r in enumerate(detailed_results, start=1):
+            tag = r.get("tag", "")
+            assigned_category = r.get("assigned_category", "未分類")
+            reason = r.get("reason", "")
+            # AI候補カテゴリリストを取得（なければ空）
+            ai_candidates = r.get("ai_candidates") or r.get("top_categories") or []
+            ai_candidates_str = ", ".join([f"{c['category']}({int(c['confidence']*100)}%)" for c in ai_candidates]) if ai_candidates else "-"
+            tk.Label(scrollable_frame, text=tag, borderwidth=1, relief="solid").grid(row=row, column=0, sticky="nsew", padx=1, pady=1)
+            tk.Label(scrollable_frame, text=assigned_category, borderwidth=1, relief="solid").grid(row=row, column=1, sticky="nsew", padx=1, pady=1)
+            tk.Label(scrollable_frame, text=ai_candidates_str, borderwidth=1, relief="solid").grid(row=row, column=2, sticky="nsew", padx=1, pady=1)
+            tk.Label(scrollable_frame, text=reason, borderwidth=1, relief="solid", wraplength=300, justify="left").grid(row=row, column=3, sticky="nsew", padx=1, pady=1)
+            var = tk.StringVar(value=assigned_category)
+            all_categories = [cat for cat in self.category_list if cat != "未分類"]
+            options = sorted(set([c['category'] for c in ai_candidates if c['category'] != assigned_category] + [c for c in all_categories if c != assigned_category]))
+            if options:
+                om = ttk.Combobox(scrollable_frame, textvariable=var, values=options, width=15, state="readonly")
+                om.grid(row=row, column=4, sticky="nsew", padx=1, pady=1)
+                def make_reassign_cmd(tag=tag, var=var, row=row):
+                    def cmd():
+                        new_cat = var.get()
+                        current_cat = scrollable_frame.grid_slaves(row=row, column=1)[0].cget("text")
+                        if new_cat and new_cat != current_cat:
+                            if self.tag_manager.set_category(tag, new_cat):
+                                try:
+                                    from modules.ai_predictor import ai_predictor
+                                    ai_predictor.usage_tracker.record_tag_usage(tag, new_cat)
+                                except Exception:
+                                    pass
+                                scrollable_frame.grid_slaves(row=row, column=1)[0].config(text=new_cat)
+                                messagebox.showinfo("再割り当て", f"{tag} のカテゴリを {new_cat} に再割り当てしました。", parent=result_dialog)
+                            else:
+                                messagebox.showerror("エラー", f"{tag} のカテゴリ変更に失敗しました。", parent=result_dialog)
+                    return cmd
+                btn = tk.Button(scrollable_frame, text="再割り当て", command=make_reassign_cmd(), width=10)
+                btn.grid(row=row, column=5, sticky="nsew", padx=1, pady=1)
+            else:
+                tk.Label(scrollable_frame, text="-", borderwidth=1, relief="solid").grid(row=row, column=4, sticky="nsew", padx=1, pady=1)
+                tk.Label(scrollable_frame, text="-", borderwidth=1, relief="solid").grid(row=row, column=5, sticky="nsew", padx=1, pady=1)
+            row_vars.append((tag, var, row))
+
+        # 一括適用ボタン
+        def apply_all():
+            changed = 0
+            for tag, var, row in row_vars:
+                new_cat = var.get()
+                current_cat = scrollable_frame.grid_slaves(row=row, column=1)[0].cget("text")
+                if new_cat and new_cat != current_cat:
+                    if self.tag_manager.set_category(tag, new_cat):
+                        try:
+                            from modules.ai_predictor import ai_predictor
+                            ai_predictor.usage_tracker.record_tag_usage(tag, new_cat)
+                        except Exception:
+                            pass
+                        scrollable_frame.grid_slaves(row=row, column=1)[0].config(text=new_cat)
+                        changed += 1
+            if changed > 0:
+                messagebox.showinfo("一括適用", f"{changed}件のカテゴリを一括で変更しました。", parent=result_dialog)
+            else:
+                messagebox.showinfo("一括適用", "変更対象がありません。", parent=result_dialog)
+
+        btn_frame = tk.Frame(result_dialog)
+        btn_frame.pack(pady=10)
+        apply_btn = tk.Button(btn_frame, text="一括適用", command=apply_all, width=15, bg="#4caf50", fg="white")
+        apply_btn.pack(side=tk.LEFT, padx=5)
+        close_btn = tk.Button(btn_frame, text="閉じる", command=result_dialog.destroy, width=10)
+        close_btn.pack(side=tk.LEFT, padx=5)
 
     def show_ai_prediction_dialog(self) -> None:
         """
-        AI予測機能のダイアログを表示
+        AI予測機能ダイアログ
         """
         dialog = Toplevel(self.root)
         dialog.title("AI予測機能")
@@ -1576,18 +1851,61 @@ class TagManagerApp:
         dialog.transient(self.root)
         dialog.grab_set()
         dialog.resizable(True, True)
-
+        
         # メインフレーム
         main_frame = tb.Frame(dialog, padding=10)
         main_frame.pack(fill=tb.BOTH, expand=True)
+        
+        # ローカルAI状態表示フレーム
+        status_frame = tb.LabelFrame(main_frame, text="ローカルAI状態", padding=10)
+        status_frame.pack(fill=tb.X, pady=(0, 10))
+        
+        # ローカルAIの読み込み状態をチェック
+        try:
+            from .local_hf_manager import local_hf_manager
+            if local_hf_manager.is_loading():
+                status_text = "🔄 ローカルAIモデル読み込み中... 最大2分程度お待ちください"
+                status_color = "warning"
+                is_ready = False
+            elif local_hf_manager.is_ready():
+                status_text = "✅ ローカルAI準備完了 - 予測機能利用可能"
+                status_color = "success"
+                is_ready = True
+            else:
+                error = local_hf_manager.get_load_error()
+                if error:
+                    status_text = f"❌ ローカルAIエラー: {error}"
+                else:
+                    status_text = "❌ ローカルAI未準備 - 予測機能利用不可"
+                status_color = "danger"
+                is_ready = False
+        except Exception as e:
+            status_text = f"❌ ローカルAIエラー: {e}"
+            status_color = "danger"
+            is_ready = False
+        
+        status_label = tb.Label(status_frame, text=status_text, bootstyle=status_color, font=("TkDefaultFont", 10, "bold"))
+        status_label.pack(anchor=tk.W)
+        
+        # タイトル
+        title_label = tb.Label(main_frame, text="AI予測機能", font=("TkDefaultFont", 16, "bold"))
+        title_label.pack(pady=(0, 20))
+        
+        # 説明
+        description_label = tb.Label(
+            main_frame, 
+            text="タグのカテゴリをAIが自動予測し、類似タグを提案します。\n学習データに基づいて精度が向上します。",
+            font=("TkDefaultFont", 10),
+            wraplength=600
+        )
+        description_label.pack(pady=(0, 20))
 
         # 入力エリア
         input_frame = tb.LabelFrame(main_frame, text="タグ入力", padding=10)
         input_frame.pack(fill=tb.X, pady=(0, 10))
 
-        tb.Label(input_frame, text="予測したいタグを入力してください:").pack(anchor=tk.W)
-        
-        tag_entry = tb.Entry(input_frame, width=50)
+        tb.Label(input_frame, text="予測したいタグをカンマまたは改行で複数入力できます:").pack(anchor=tk.W)
+        tag_entry = tk.Text(input_frame, width=50, height=3)
         tag_entry.pack(fill=tb.X, pady=(5, 10))
         tag_entry.focus()
 
@@ -1595,37 +1913,80 @@ class TagManagerApp:
         button_frame = tb.Frame(input_frame)
         button_frame.pack(fill=tb.X)
 
-        def predict_category() -> None:
-            tag = tag_entry.get().strip()
-            if not tag:
+        def predict_category_bulk() -> None:
+            text = tag_entry.get("1.0", tk.END).strip()
+            if not text:
                 messagebox.showwarning("警告", "タグを入力してください。")
                 return
-            
+            # タグ分割
+            tags = [t.strip() for t in re.split(r'[\n,]+', text) if t.strip()]
+            if not tags:
+                messagebox.showwarning("警告", "タグを入力してください。")
+                return
+            # ローカルAIの状態をチェック
             try:
-                # AI予測を実行
-                category, confidence = predict_category_ai(tag)
-                
-                # 結果表示
-                result_text = f"予測カテゴリ: {category}\n"
-                result_text += f"信頼度: {confidence:.1f}%\n\n"
-                result_text += "詳細情報:\n"
-                result_text += f"- AIスコア: {confidence:.2f}\n"
-                result_text += f"- キーワードスコア: 0\n"
-                result_text += f"- コンテキストブースト: 0\n"
-                result_text += f"- 動的重み: 0.00\n"
-                result_text += f"- 使用頻度: 0\n"
-                result_text += f"- 最終使用: 不明\n"
-                
-                result_textarea.delete(1.0, tk.END)
-                result_textarea.insert(1.0, result_text)
-                
+                if local_hf_manager.is_loading():
+                    messagebox.showwarning("警告", "ローカルAIモデルがまだ読み込み中です。しばらくお待ちください。")
+                    return
+                elif not local_hf_manager.is_ready():
+                    messagebox.showerror("エラー", "ローカルAIモデルが準備できていません。")
+                    return
             except Exception as e:
-                messagebox.showerror("エラー", f"予測中にエラーが発生しました: {str(e)}")
+                messagebox.showerror("エラー", f"ローカルAIモデルの状態確認に失敗しました: {e}")
+                return
+            # 予測
+            tag_cat_map = {}
+            for tag in tags:
+                try:
+                    cat, conf = predict_category_ai(tag)
+                except Exception:
+                    cat = "未分類"
+                tag_cat_map[tag] = cat
+            # MultiTagCategoryAssignDialogでユーザー最終選択
+            dlg = MultiTagCategoryAssignDialog(self.root, tags)
+            # 予測カテゴリを初期値で反映（UI拡張時に利用）
+            # for tag, cat in tag_cat_map.items():
+            #     if cat in dlg.category_vars[tag]:
+            #         dlg.category_vars[tag][cat].set(True)
+            if not dlg.result:
+                return
+            added, skipped = 0, 0
+            for tag, categories in dlg.result.items():
+                for cat in categories:
+                    if not self.tag_manager.tag_exists(tag, False):
+                        self.tag_manager.add_tag(tag, False, cat)
+                        added += 1
+                        try:
+                            from modules.ai_predictor import get_ai_predictor
+                            ai_predictor = get_ai_predictor()
+                            ai_predictor.usage_tracker.record_tag_usage(tag, cat)
+                        except Exception:
+                            pass
+                    else:
+                        skipped += 1
+            if added > 0:
+                self.refresh_tabs()
+                messagebox.showinfo("完了", f"{added}個のタグを追加しました。", parent=self.root)
+
+        predict_btn = tb.Button(button_frame, text="カテゴリ一括予測・一括適用", command=predict_category_bulk, bootstyle="primary", state="disabled" if not is_ready else "normal")
+        predict_btn.pack(side=tk.LEFT, padx=(0, 10))
 
         def suggest_similar() -> None:
             tag = tag_entry.get().strip()
             if not tag:
                 messagebox.showwarning("警告", "タグを入力してください。")
+                return
+            
+            # ローカルAIの状態をチェック
+            try:
+                if local_hf_manager.is_loading():
+                    messagebox.showwarning("警告", "ローカルAIモデルがまだ読み込み中です。しばらくお待ちください。")
+                    return
+                elif not local_hf_manager.is_ready():
+                    messagebox.showerror("エラー", "ローカルAIモデルが準備できていません。")
+                    return
+            except Exception as e:
+                messagebox.showerror("エラー", f"ローカルAIモデルの状態確認に失敗しました: {e}")
                 return
             
             try:
@@ -1643,8 +2004,14 @@ class TagManagerApp:
             except Exception as e:
                 messagebox.showerror("エラー", f"類似タグ検索中にエラーが発生しました: {str(e)}")
 
-        tb.Button(button_frame, text="カテゴリ予測", command=predict_category, bootstyle="primary").pack(side=tk.LEFT, padx=(0, 10))
-        tb.Button(button_frame, text="類似タグ検索", command=suggest_similar, bootstyle="info").pack(side=tk.LEFT)
+        # ボタンの状態を設定
+        predict_btn = tb.Button(button_frame, text="カテゴリ予測", command=predict_category_bulk, 
+                               bootstyle="primary", state="disabled" if not is_ready else "normal")
+        predict_btn.pack(side=tk.LEFT, padx=(0, 10))
+        
+        similar_btn = tb.Button(button_frame, text="類似タグ検索", command=suggest_similar, 
+                               bootstyle="info", state="disabled" if not is_ready else "normal")
+        similar_btn.pack(side=tk.LEFT)
 
         # 結果表示エリア
         result_frame = tb.LabelFrame(main_frame, text="予測結果", padding=10)
@@ -1657,12 +2024,48 @@ class TagManagerApp:
         result_textarea = tk.Text(text_frame, wrap=tk.WORD, font=("TkDefaultFont", 10))
         scrollbar = tb.Scrollbar(text_frame, orient=tk.VERTICAL, command=result_textarea.yview)
         result_textarea.configure(yscrollcommand=scrollbar.set)
-
+        
         result_textarea.pack(side=tk.LEFT, fill=tb.BOTH, expand=True)
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
 
         # 閉じるボタン
-        tb.Button(main_frame, text="閉じる", command=dialog.destroy, bootstyle="secondary").pack(pady=(10, 0))
+        close_btn = tk.Button(dialog, text="閉じる", command=dialog.destroy)
+        close_btn.pack(pady=10)
+        
+        # ローカルAI状態の定期更新
+        def update_status():
+            try:
+                if local_hf_manager.is_loading():
+                    status_text = "🔄 ローカルAIモデル読み込み中... 最大2分程度お待ちください"
+                    status_color = "warning"
+                    is_ready = False
+                elif local_hf_manager.is_ready():
+                    status_text = "✅ ローカルAI準備完了 - 予測機能利用可能"
+                    status_color = "success"
+                    is_ready = True
+                else:
+                    error = local_hf_manager.get_load_error()
+                    if error:
+                        status_text = f"❌ ローカルAIエラー: {error}"
+                    else:
+                        status_text = "❌ ローカルAI未準備 - 予測機能利用不可"
+                    status_color = "danger"
+                    is_ready = False
+                
+                status_label.config(text=status_text, bootstyle=status_color)
+                predict_btn.config(state="normal" if is_ready else "disabled")
+                similar_btn.config(state="normal" if is_ready else "disabled")
+                
+            except Exception as e:
+                status_label.config(text=f"❌ ローカルAIエラー: {e}", bootstyle="danger")
+                predict_btn.config(state="disabled")
+                similar_btn.config(state="disabled")
+            
+            # 1秒後に再更新
+            dialog.after(1000, update_status)
+        
+        # 状態更新を開始
+        update_status()
 
     def show_ai_settings_dialog(self) -> None:
         """
@@ -1683,15 +2086,34 @@ class TagManagerApp:
         settings_frame = tb.LabelFrame(main_frame, text="予測設定", padding=10)
         settings_frame.pack(fill=tb.BOTH, expand=True)
 
+        # 現在の設定を読み込み
+        current_settings = {}
+        try:
+            settings_file = os.path.join('resources', 'config', 'ai_settings.json')
+            if os.path.exists(settings_file):
+                with open(settings_file, 'r', encoding='utf-8') as f:
+                    current_settings = json.load(f)
+        except Exception:
+            pass
+        
         # AI予測の有効/無効
-        ai_enabled_var = tk.BooleanVar(value=True)
+        ai_enabled_var = tk.BooleanVar(value=current_settings.get('ai_enabled', True))
         tb.Checkbutton(settings_frame, text="AI予測を有効にする", variable=ai_enabled_var).pack(anchor=tk.W, pady=5)
+        
+        # ローカルAI機能の無効化
+        local_ai_disabled_var = tk.BooleanVar(value=current_settings.get('local_ai_disabled', False))
+        tb.Checkbutton(settings_frame, text="ローカルAI機能を無効にする（高速化）", variable=local_ai_disabled_var).pack(anchor=tk.W, pady=5)
+        
+        # 説明
+        info_label = tk.Label(settings_frame, text="※ ローカルAI機能を無効にすると、HuggingFaceモデルの読み込みをスキップして高速化されます。\n   従来のキーワードマッチングのみが使用されます。", 
+                             fg="gray", font=("TkDefaultFont", 8), justify=tk.LEFT)
+        info_label.pack(anchor=tk.W, pady=(0, 10))
 
         # 信頼度閾値
         threshold_frame = tb.Frame(settings_frame)
         threshold_frame.pack(fill=tb.X, pady=5)
         tb.Label(threshold_frame, text="信頼度閾値 (%):").pack(side=tk.LEFT)
-        threshold_var = tk.StringVar(value="70")
+        threshold_var = tk.StringVar(value=str(current_settings.get('confidence_threshold', 70)))
         threshold_entry = tb.Entry(threshold_frame, textvariable=threshold_var, width=10)
         threshold_entry.pack(side=tk.LEFT, padx=(10, 0))
 
@@ -1754,6 +2176,7 @@ class TagManagerApp:
                 # 設定を保存
                 settings = {
                     'ai_enabled': ai_enabled_var.get(),
+                    'local_ai_disabled': local_ai_disabled_var.get(),
                     'confidence_threshold': float(threshold_var.get())
                 }
                 
@@ -1763,7 +2186,7 @@ class TagManagerApp:
                 with open(settings_file, 'w', encoding='utf-8') as f:
                     json.dump(settings, f, ensure_ascii=False, indent=2)
                 
-                messagebox.showinfo("成功", "設定を保存しました。")
+                messagebox.showinfo("成功", "設定を保存しました。\nローカルAI機能の設定変更は次回起動時に反映されます。")
                 dialog.destroy()
             except Exception as e:
                 messagebox.showerror("エラー", f"設定保存中にエラーが発生しました: {str(e)}")
@@ -2026,6 +2449,989 @@ class TagManagerApp:
 
         # 初期データ読み込み
         refresh_rule_list()
+
+    def auto_assign_selected_tags(self) -> None:
+        """
+        選択中のタグのみAI自動割り当て（候補スコア差が小さい場合は2位・3位も考慮）
+        """
+        try:
+            tree = self.trees[self.current_category]
+            selected = tree.selection()
+            if not selected:
+                messagebox.showinfo("自動割り当て", "自動割り当てしたいタグを選択してください。", parent=self.root)
+                return
+            selected_tags = [tree.item(item, "values")[0] for item in selected]
+            all_tags = self.tag_manager.get_all_tags()
+            tag_info_map = {tag_info["tag"]: tag_info for tag_info in all_tags}
+            selected_tag_data = [tag_info_map[tag] for tag in selected_tags if tag in tag_info_map]
+            if not selected_tag_data:
+                messagebox.showinfo("自動割り当て", "選択タグの情報が取得できませんでした。", parent=self.root)
+                return
+            progress_dialog = ProgressDialog(self.root, "選択タグの自動割り当て", f"{len(selected_tag_data)}件のタグをAI自動割り当て中...")
+            def worker_auto_assign_selected() -> None:
+                try:
+                    assigned_count = 0
+                    skipped_count = 0
+                    detailed_results = []
+                    for i, tag_data in enumerate(selected_tag_data):
+                        tag_name = tag_data.get("tag", "")
+                        progress_dialog.set_message(f"AI予測中... ({i+1}/{len(selected_tag_data)}) {tag_name}")
+                        try:
+                            from modules.ai_predictor import ai_predictor
+                            cat, conf, details = ai_predictor.predict_category_with_confidence(tag_name)
+                            ai_candidates = details.get("top_categories", [])
+                            candidate_cats = details.get("candidate_cats", [])
+                            # 最も妥当なカテゴリを自動選択（未分類時は候補1位）
+                            assigned_category = cat
+                            if assigned_category == "未分類" and candidate_cats:
+                                assigned_category = candidate_cats[0]
+                            if assigned_category != "未分類":
+                                if self.tag_manager.set_category(tag_name, assigned_category):
+                                    assigned_count += 1
+                                else:
+                                    skipped_count += 1
+                            else:
+                                skipped_count += 1
+                            detailed_results.append({
+                                "tag": tag_name,
+                                "assigned_category": assigned_category,
+                                "ai_candidates": ai_candidates,
+                                "reason": details.get("reason", "")
+                            })
+                        except Exception as e:
+                            detailed_results.append({
+                                "tag": tag_name,
+                                "assigned_category": "未分類",
+                                "ai_candidates": [],
+                                "reason": f"AI予測エラー: {str(e)}"
+                            })
+                            skipped_count += 1
+                    def show_completion() -> None:
+                        progress_dialog.close()
+                        result_text = f"AI予測による処理が完了しました。\n\n"
+                        result_text += f"カテゴリ割り当て: {assigned_count}個\n"
+                        result_text += f"未分類のまま: {skipped_count}個\n"
+                        self.show_detailed_assignment_results(detailed_results, result_text)
+                    self.root.after(0, show_completion)
+                except Exception as e:
+                    progress_dialog.close()
+                    messagebox.showerror("エラー", f"選択タグの自動割り当て中にエラーが発生しました: {str(e)}")
+            threading.Thread(target=worker_auto_assign_selected, daemon=True).start()
+        except Exception as e:
+            messagebox.showerror("エラー", f"選択タグの自動割り当て初期化中にエラーが発生しました: {str(e)}")
+
+    def show_ai_learning_data_dialog(self) -> None:
+        """
+        AI学習データ（修正履歴・信頼度・推論理由）を可視化するダイアログ
+        """
+        from modules.ai_predictor import ai_predictor
+        dialog = Toplevel(self.root)
+        dialog.title("AI学習データ可視化")
+        dialog.geometry("1200x800")
+        dialog.transient(self.root)
+        dialog.grab_set()
+        dialog.resizable(True, True)
+        
+        # メインフレーム
+        main_frame = tb.Frame(dialog, padding=10)
+        main_frame.pack(fill=tb.BOTH, expand=True)
+        
+        # ローカルAI状態表示フレーム
+        status_frame = tb.LabelFrame(main_frame, text="ローカルAI状態", padding=10)
+        status_frame.pack(fill=tb.X, pady=(0, 10))
+        
+        # ローカルAIの読み込み状態をチェック
+        try:
+            from .local_hf_manager import local_hf_manager
+            if local_hf_manager.is_loading():
+                status_text = "🔄 ローカルAIモデル読み込み中... 最大2分程度お待ちください"
+                status_color = "warning"
+                is_ready = False
+            elif local_hf_manager.is_ready():
+                status_text = "✅ ローカルAI準備完了 - 予測機能利用可能"
+                status_color = "success"
+                is_ready = True
+            else:
+                error = local_hf_manager.get_load_error()
+                if error:
+                    status_text = f"❌ ローカルAIエラー: {error}"
+                else:
+                    status_text = "❌ ローカルAI未準備 - 予測機能利用不可"
+                status_color = "danger"
+                is_ready = False
+        except Exception as e:
+            status_text = f"❌ ローカルAIエラー: {e}"
+            status_color = "danger"
+            is_ready = False
+        
+        status_label = tb.Label(status_frame, text=status_text, bootstyle=status_color, font=("TkDefaultFont", 10, "bold"))
+        status_label.pack(anchor=tk.W)
+        
+        # 制御フレーム
+        control_frame = tb.Frame(main_frame)
+        control_frame.pack(fill=tb.X, pady=(0, 10))
+        
+        # 左側：オプション
+        option_frame = tb.LabelFrame(control_frame, text="表示オプション", padding=5)
+        option_frame.pack(side=tk.LEFT, fill=tb.X, expand=True, padx=(0, 10))
+        
+        skip_ai_var = tk.BooleanVar(value=False)
+        skip_ai_check = tk.Checkbutton(option_frame, text="AI予測をスキップ（高速表示）", variable=skip_ai_var, state="disabled" if not is_ready else "normal")
+        skip_ai_check.pack(side=tk.LEFT, padx=(0, 10))
+        
+        show_all_tags_var = tk.BooleanVar(value=True)
+        show_all_tags_check = tk.Checkbutton(option_frame, text="全タグを表示（学習履歴なしも含む）", variable=show_all_tags_var)
+        show_all_tags_check.pack(side=tk.LEFT, padx=(0, 10))
+        
+        # 右側：ボタン
+        button_frame = tb.Frame(control_frame)
+        button_frame.pack(side=tk.RIGHT)
+        
+        # データ読み込み開始ボタン
+        def start_data_load():
+            # ローカルAIの状態を再チェック
+            try:
+                if local_hf_manager.is_loading():
+                    messagebox.showwarning("警告", "ローカルAIモデルがまだ読み込み中です。しばらくお待ちください。")
+                    return
+                elif not local_hf_manager.is_ready():
+                    messagebox.showerror("エラー", "ローカルAIモデルが準備できていません。")
+                    return
+            except Exception as e:
+                messagebox.showerror("エラー", f"ローカルAIモデルの状態確認に失敗しました: {e}")
+                return
+            
+            # ボタンを無効化
+            start_btn.config(state="disabled")
+            skip_ai_check.config(state="normal")
+            
+            # データ読み込み開始
+            load_data_async()
+        
+        start_btn = tk.Button(button_frame, text="データ読み込み開始", command=start_data_load, 
+                             state="disabled" if not is_ready else "normal", 
+                             bg="green" if is_ready else "gray", fg="white")
+        start_btn.pack(side=tk.LEFT, padx=(0, 5))
+        
+        # テストタグ削除ボタン
+        def cleanup_test_tags():
+            try:
+                removed_count = ai_predictor.usage_tracker.cleanup_test_tags()
+                if removed_count > 0:
+                    messagebox.showinfo("テストタグ削除", f"テストタグ {removed_count} 個を学習履歴から削除しました。")
+                    # ダイアログを再読み込み
+                    dialog.destroy()
+                    self.show_ai_learning_data_dialog()
+                else:
+                    messagebox.showinfo("テストタグ削除", "削除するテストタグが見つかりませんでした。")
+            except Exception as e:
+                messagebox.showerror("エラー", f"テストタグ削除中にエラーが発生しました: {str(e)}")
+        
+        cleanup_btn = tk.Button(button_frame, text="テストタグ削除", command=cleanup_test_tags, bg="orange", fg="white")
+        cleanup_btn.pack(side=tk.LEFT, padx=(0, 5))
+        
+        # 統計情報表示ボタン
+        def show_statistics():
+            try:
+                usage_data = ai_predictor.usage_tracker.usage_data
+                all_tags = self.tag_manager.get_all_tags()
+                
+                total_learning_tags = len(usage_data)
+                total_db_tags = len(all_tags)
+                
+                # カテゴリ別統計
+                category_stats = {}
+                for tag_info in all_tags:
+                    category = tag_info.get("category", "未分類")
+                    category_stats[category] = category_stats.get(category, 0) + 1
+                
+                # 学習履歴のあるタグの統計
+                learning_category_stats = {}
+                for tag, info in usage_data.items():
+                    if info.get("categories"):
+                        most_common_cat = max(info["categories"].items(), key=lambda x: x[1])[0]
+                        learning_category_stats[most_common_cat] = learning_category_stats.get(most_common_cat, 0) + 1
+                
+                # 統計情報を表示
+                stats_text = f"=== AI学習データ統計 ===\n\n"
+                stats_text += f"総タグ数（DB）: {total_db_tags}個\n"
+                stats_text += f"学習履歴あり: {total_learning_tags}個\n"
+                stats_text += f"学習履歴なし: {total_db_tags - total_learning_tags}個\n\n"
+                
+                stats_text += "=== カテゴリ別統計（DB） ===\n"
+                for category, count in sorted(category_stats.items(), key=lambda x: x[1], reverse=True):
+                    stats_text += f"{category}: {count}個\n"
+                
+                stats_text += "\n=== 学習履歴カテゴリ別統計 ===\n"
+                for category, count in sorted(learning_category_stats.items(), key=lambda x: x[1], reverse=True):
+                    stats_text += f"{category}: {count}個\n"
+                
+                # 統計ダイアログを表示
+                stats_dialog = Toplevel(dialog)
+                stats_dialog.title("AI学習データ統計")
+                stats_dialog.geometry("500x600")
+                stats_dialog.transient(dialog)
+                stats_dialog.grab_set()
+                
+                text_widget = tk.Text(stats_dialog, wrap=tk.WORD, font=("TkDefaultFont", 10))
+                scrollbar = ttk.Scrollbar(stats_dialog, orient=tk.VERTICAL, command=text_widget.yview)
+                text_widget.configure(yscrollcommand=scrollbar.set)
+                
+                text_widget.pack(side=tk.LEFT, fill=tb.BOTH, expand=True, padx=10, pady=10)
+                scrollbar.pack(side=tk.RIGHT, fill=tk.Y, pady=10)
+                
+                text_widget.insert(tk.END, stats_text)
+                text_widget.config(state=tk.DISABLED)
+                
+                tk.Button(stats_dialog, text="閉じる", command=stats_dialog.destroy).pack(pady=10)
+                
+            except Exception as e:
+                messagebox.showerror("エラー", f"統計情報の取得中にエラーが発生しました: {str(e)}")
+        
+        stats_btn = tk.Button(button_frame, text="統計情報", command=show_statistics, bg="blue", fg="white")
+        stats_btn.pack(side=tk.LEFT)
+        
+        # プログレス表示用フレーム
+        progress_frame = tb.Frame(main_frame)
+        progress_frame.pack(fill=tb.X, pady=(0, 10))
+        progress_label = tk.Label(progress_frame, text="データを読み込み中...", font=("TkDefaultFont", 10))
+        progress_label.pack(side=tk.LEFT)
+        progress_bar = ttk.Progressbar(progress_frame, mode='indeterminate')
+        progress_bar.pack(side=tk.RIGHT, fill=tk.X, expand=True, padx=(10, 0))
+        progress_bar.start()
+        
+        # ヘッダー
+        columns = ("タグ", "現在のカテゴリ", "修正履歴回数", "最頻カテゴリ", "AI予測カテゴリ", "信頼度", "推論理由")
+        tree = ttk.Treeview(main_frame, columns=columns, show="headings", height=30)
+        for col in columns:
+            tree.heading(col, text=col)
+            if col == "タグ":
+                tree.column(col, width=150)
+            elif col == "推論理由":
+                tree.column(col, width=200)
+            else:
+                tree.column(col, width=120)
+        tree.pack(fill=tb.BOTH, expand=True)
+        
+        # スクロールバーを追加
+        tree_scrollbar = ttk.Scrollbar(main_frame, orient="vertical", command=tree.yview)
+        tree_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        tree.configure(yscrollcommand=tree_scrollbar.set)
+        
+        # 閉じるボタン
+        close_btn = tk.Button(dialog, text="閉じる", command=dialog.destroy)
+        close_btn.pack(pady=10)
+        
+        # 初期状態の表示
+        self._ai_learning_data_loaded = False  # ← フラグ追加
+        if not is_ready:
+            tree.insert("", tk.END, values=("(ローカルAI未準備)", "-", "-", "-", "-", "-", "ローカルAIモデルの読み込みを待機中..."))
+        else:
+            tree.insert("", tk.END, values=("(データ読み込み待機)", "-", "-", "-", "-", "-", "「データ読み込み開始」ボタンを押してください"))
+        
+        # 非同期でデータを読み込む
+        def load_data_async():
+            try:
+                # 既存のデータをクリア
+                for item in tree.get_children():
+                    tree.delete(item)
+                self._ai_learning_data_loaded = True  # ← データ読み込み済みフラグON
+                
+                # 学習履歴データを取得
+                usage_data = ai_predictor.usage_tracker.usage_data
+                
+                # 全タグデータを取得
+                all_tags = self.tag_manager.get_all_tags()
+                tag_info_map = {tag_info["tag"]: tag_info for tag_info in all_tags}
+                
+                # 表示するタグを決定
+                if show_all_tags_var.get():
+                    # 全タグを表示
+                    display_tags = set(tag_info_map.keys())
+                    # 学習履歴のあるタグも追加
+                    for tag in usage_data.keys():
+                        display_tags.add(tag)
+                else:
+                    # 学習履歴のあるタグのみ表示
+                    display_tags = set(usage_data.keys())
+                
+                # テストタグをフィルタリング
+                filtered_tags = []
+                for tag in display_tags:
+                    if any(test_word in tag.lower() for test_word in ['test', 'テスト', 'サンプル', 'sample', 'デモ', 'demo', 'example', '例']):
+                        continue
+                    filtered_tags.append(tag)
+                
+                if not filtered_tags:
+                    tree.insert("", tk.END, values=("(表示データなし)", "-", "-", "-", "-", "-", "表示するタグが見つかりませんでした"))
+                    return
+                
+                total_items = len(filtered_tags)
+                processed = 0
+                
+                # AI予測結果のキャッシュ
+                prediction_cache = {}
+                
+                for tag in filtered_tags:
+                    # 現在のカテゴリを取得
+                    current_category = "不明"
+                    if tag in tag_info_map:
+                        current_category = tag_info_map[tag].get("category", "未分類")
+                    
+                    # 学習履歴情報を取得
+                    usage_count = 0
+                    most_common_cat = None
+                    if tag in usage_data:
+                        usage_count = usage_data[tag].get("count", 0)
+                        if usage_data[tag].get("categories"):
+                            most_common_cat = max(usage_data[tag]["categories"].items(), key=lambda x: x[1])[0]
+                    
+                    # AI予測（スキップオプション付き）
+                    if skip_ai_var.get():
+                        # AI予測をスキップ
+                        pred_cat, conf, reason = "スキップ", 0.0, "AI予測をスキップしました"
+                    elif tag in prediction_cache:
+                        pred_cat, conf, reason = prediction_cache[tag]
+                    else:
+                        try:
+                            pred_cat, conf, details = ai_predictor.predict_category_with_confidence(tag)
+                            reason = details.get("reason", "")
+                            # キャッシュに保存
+                            prediction_cache[tag] = (pred_cat, conf, reason)
+                        except Exception as e:
+                            pred_cat, conf, reason = "未分類", 0.0, f"AI予測エラー: {str(e)[:50]}"
+                            prediction_cache[tag] = (pred_cat, conf, reason)
+                    
+                    # メインスレッドでUI更新
+                    values = (
+                        tag, 
+                        current_category, 
+                        usage_count, 
+                        most_common_cat or "-", 
+                        pred_cat, 
+                        f"{conf*100:.1f}%" if conf > 0 else "-", 
+                        reason[:80]+("..." if len(reason)>80 else "") if reason else "-"
+                    )
+                    dialog.after(0, lambda v=values: tree.insert("", tk.END, values=v))
+                    
+                    processed += 1
+                    # プログレス更新（5件ごと）
+                    if processed % 5 == 0:
+                        progress_text = f"データ処理中... {processed}/{total_items}"
+                        dialog.after(0, lambda t=progress_text: progress_label.config(text=t))
+                        dialog.after(0, lambda: dialog.update())
+                
+                # 完了時の処理
+                dialog.after(0, lambda: progress_label.config(text=f"完了 - {total_items}件のタグを表示"))
+                dialog.after(0, progress_bar.stop)
+                dialog.after(0, lambda: progress_frame.pack_forget())  # プログレスバーを非表示
+                
+            except Exception as e:
+                dialog.after(0, lambda: progress_label.config(text=f"エラー: {str(e)}"))
+                dialog.after(0, progress_bar.stop)
+                messagebox.showerror("エラー", f"データ読み込み中にエラーが発生しました: {str(e)}")
+        
+        # ローカルAI状態の定期更新
+        def update_status():
+            try:
+                if local_hf_manager.is_loading():
+                    status_text = "🔄 ローカルAIモデル読み込み中... 最大2分程度お待ちください"
+                    status_color = "warning"
+                    is_ready = False
+                elif local_hf_manager.is_ready():
+                    status_text = "✅ ローカルAI準備完了 - データ読み込み可能"
+                    status_color = "success"
+                    is_ready = True
+                else:
+                    error = local_hf_manager.get_load_error()
+                    if error:
+                        status_text = f"❌ ローカルAIエラー: {error}"
+                    else:
+                        status_text = "❌ ローカルAI未準備 - データ読み込み不可"
+                    status_color = "danger"
+                    is_ready = False
+                
+                status_label.config(text=status_text, bootstyle=status_color)
+                start_btn.config(state="normal" if is_ready else "disabled", 
+                               bg="green" if is_ready else "gray")
+                
+                # 状態が変わった場合の処理
+                # データ未読込かつボタンが有効化された直後のみ初期化
+                if is_ready and start_btn.cget("state") == "normal" and not self._ai_learning_data_loaded:
+                    for item in tree.get_children():
+                        tree.delete(item)
+                    tree.insert("", tk.END, values=("(データ読み込み待機)", "-", "-", "-", "-", "-", "「データ読み込み開始」ボタンを押してください"))
+                # すでにデータ読み込み済みならツリー内容は維持
+            except Exception as e:
+                status_label.config(text=f"❌ ローカルAIエラー: {e}", bootstyle="danger")
+                start_btn.config(state="disabled", bg="gray")
+            dialog.after(1000, update_status)
+        update_status()
+
+    def bulk_reassign_category(self, category: str) -> None:
+        """
+        指定カテゴリ内の全タグをAIで再分類し、結果を反映・レポート表示
+        """
+        from modules.ai_predictor import ai_predictor
+        tags = [t["tag"] for t in self.tag_manager.get_tags_by_category(category)]
+        if not tags:
+            messagebox.showinfo("情報", f"カテゴリ「{category}」にタグがありません。", parent=self.root)
+            return
+        progress_dialog = ProgressDialog(self.root, title="AI再分類中", message=f"カテゴリ「{category}」のタグをAI再分類しています...")
+        reassigned = 0
+        unchanged = 0
+        failed = 0
+        details = []
+        for tag in tags:
+            try:
+                pred_cat, conf, info = ai_predictor.predict_category_with_confidence(tag)
+                if pred_cat != category and pred_cat != "未分類":
+                    self.tag_manager.set_category(tag, pred_cat)
+                    reassigned += 1
+                    details.append((tag, category, pred_cat, f"信頼度: {conf*100:.1f}%", info.get("reason", "")))
+                else:
+                    unchanged += 1
+            except Exception as e:
+                failed += 1
+                details.append((tag, category, "エラー", "-", str(e)))
+        progress_dialog.close()
+        result = f"AI再分類完了: {reassigned}件再分類, {unchanged}件変更なし, {failed}件エラー\n"
+        if details:
+            result += "\n詳細:\n" + "\n".join([f"{t} [{c}→{p}] {r} {reason}" for t, c, p, r, reason in details])
+        messagebox.showinfo("AI再分類結果", result, parent=self.root)
+
+    def show_bulk_reassign_dialog(self) -> None:
+        """
+        カテゴリ選択→一括AI再分類ダイアログ
+        """
+        cats = [c for c in self.category_keywords.keys()]
+        dialog = Toplevel(self.root)
+        dialog.title("カテゴリ一括AI再分類")
+        dialog.geometry("400x200")
+        dialog.transient(self.root)
+        dialog.grab_set()
+        var = tk.StringVar(value=cats[0] if cats else "")
+        tk.Label(dialog, text="再分類したいカテゴリを選択:").pack(pady=10)
+        combo = ttk.Combobox(dialog, values=cats, textvariable=var, state="readonly")
+        combo.pack(pady=5)
+        def on_ok():
+            cat = var.get()
+            dialog.destroy()
+            self.bulk_reassign_category(cat)
+        tk.Button(dialog, text="AI再分類実行", command=on_ok).pack(pady=10)
+        tk.Button(dialog, text="キャンセル", command=dialog.destroy).pack()
+
+    def show_bulk_reassign_result_dialog(self, details: list, summary: str) -> None:
+        """
+        一括AI再分類の詳細結果をテーブル表示し、各行で手動再割り当て可能なダイアログ
+        """
+        dialog = Toplevel(self.root)
+        dialog.title("AI再分類詳細結果")
+        dialog.geometry("900x600")
+        dialog.transient(self.root)
+        dialog.grab_set()
+        # サマリ
+        tk.Label(dialog, text=summary, anchor="w", justify="left").pack(fill=tk.X, padx=10, pady=5)
+        # テーブル
+        columns = ("タグ", "元カテゴリ", "AI新カテゴリ", "信頼度", "理由", "操作")
+        tree = ttk.Treeview(dialog, columns=columns, show="headings", height=25)
+        for col in columns[:-1]:
+            tree.heading(col, text=col)
+            tree.column(col, width=150)
+        tree.heading("操作", text="操作")
+        tree.column("操作", width=100)
+        tree.pack(fill=tb.BOTH, expand=True, padx=10, pady=5)
+        # ボタン配置用
+        btn_refs = {}
+        for i, (tag, old_cat, new_cat, conf, reason) in enumerate(details):
+            iid = tree.insert("", tk.END, values=(tag, old_cat, new_cat, conf, reason[:60]+("..." if len(reason)>60 else ""), "再割り当て"))
+            btn_refs[iid] = (tag, new_cat)
+        # 操作列クリック時のハンドラ
+        def on_tree_click(event):
+            item = tree.identify_row(event.y)
+            col = tree.identify_column(event.x)
+            if col == f"#{len(columns)}" and item in btn_refs:
+                tag, ai_cat = btn_refs[item]
+                self.show_manual_reassign_dialog(tag, ai_cat)
+        tree.bind("<Button-1>", on_tree_click)
+        tk.Button(dialog, text="閉じる", command=dialog.destroy).pack(pady=10)
+
+    def show_manual_reassign_dialog(self, tag: str, ai_cat: str) -> None:
+        """
+        タグの手動再割り当てダイアログ
+        """
+        cats = [c for c in self.category_keywords.keys()]
+        dialog = Toplevel(self.root)
+        dialog.title(f"タグ「{tag}」の手動再割り当て")
+        dialog.geometry("400x200")
+        dialog.transient(self.root)
+        dialog.grab_set()
+        var = tk.StringVar(value=ai_cat if ai_cat in cats else cats[0])
+        tk.Label(dialog, text=f"タグ: {tag}").pack(pady=10)
+        tk.Label(dialog, text="新しいカテゴリを選択:").pack()
+        combo = ttk.Combobox(dialog, values=cats, textvariable=var, state="readonly")
+        combo.pack(pady=5)
+        def on_ok():
+            new_cat = var.get()
+            self.tag_manager.set_category(tag, new_cat)
+            messagebox.showinfo("完了", f"タグ「{tag}」を「{new_cat}」に再割り当てしました。", parent=dialog)
+            dialog.destroy()
+        tk.Button(dialog, text="再割り当て", command=on_ok).pack(pady=10)
+        tk.Button(dialog, text="キャンセル", command=dialog.destroy).pack()
+
+    def show_prompt_translator(self) -> None:
+        """
+        プロンプト出力欄の日本語を一括翻訳する
+        """
+        try:
+            from modules.prompt_translator import prompt_translator
+            
+            # 現在の出力欄内容を取得
+            current_text = self.output.get("1.0", tk.END).strip()
+            if not current_text:
+                messagebox.showwarning("警告", "翻訳する内容がありません。プロンプト出力欄に日本語を入力してください。", parent=self.root)
+                return
+            
+            # 日本語部分を抽出（ひらがな、カタカナ、漢字を含む部分）
+            import re
+            japanese_pattern = r'[ぁ-んァ-ン一-龥]+'
+            japanese_matches = re.findall(japanese_pattern, current_text)
+            
+            if not japanese_matches:
+                messagebox.showwarning("警告", "翻訳可能な日本語が見つかりません。", parent=self.root)
+                return
+            
+            # 翻訳対象の日本語を表示
+            japanese_text = " ".join(japanese_matches)
+            confirm_msg = f"以下の日本語を翻訳しますか？\n\n{japanese_text}"
+            if not messagebox.askyesno("翻訳確認", confirm_msg, parent=self.root):
+                return
+            
+            # 進捗ダイアログを表示
+            progress_dialog = Toplevel(self.root)
+            progress_dialog.title("翻訳中")
+            progress_dialog.geometry("400x150")
+            progress_dialog.transient(self.root)
+            progress_dialog.grab_set()
+            progress_dialog.resizable(False, False)
+            
+            progress_frame = tb.Frame(progress_dialog, padding=20)
+            progress_frame.pack(fill=tb.BOTH, expand=True)
+            
+            progress_label = tb.Label(progress_frame, text="翻訳中...", font=("TkDefaultFont", 12))
+            progress_label.pack(pady=(0, 10))
+            
+            progress_bar = tb.Progressbar(progress_frame, mode='indeterminate', bootstyle="success")
+            progress_bar.pack(fill=tb.X, pady=(0, 10))
+            progress_bar.start()
+            
+            def translate_worker():
+                try:
+                    # 翻訳実行
+                    translated_text, details = prompt_translator.translate_prompt(japanese_text)
+                    
+                    # UIスレッドで結果を処理
+                    self.root.after(0, lambda: process_translation_result(translated_text, details))
+                    
+                except Exception as e:
+                    # UIスレッドでエラーを表示
+                    self.root.after(0, lambda: show_translation_error(str(e)))
+            
+            def process_translation_result(translated_text: str, details: str):
+                progress_dialog.destroy()
+                
+                # 翻訳結果を確認
+                result_msg = f"翻訳結果:\n\n{translated_text}\n\nこの結果で出力欄を置き換えますか？"
+                if messagebox.askyesno("翻訳完了", result_msg, parent=self.root):
+                    # 出力欄を翻訳結果で置き換え
+                    self.output.delete("1.0", tk.END)
+                    self.output.insert("1.0", translated_text)
+                    
+                    # タグ一覧（DB）にも新規保存
+                    tags = [t.strip() for t in translated_text.replace("\n", ",").split(",") if t.strip()]
+                    added, skipped = 0, 0
+                    is_negative = (self.current_category == "ネガティブ")
+                    for tag in tags:
+                        # 既存タグと重複しない場合のみ追加
+                        if not self.tag_manager.tag_exists(tag, is_negative):
+                            self.tag_manager.add_tag(tag, is_negative, self.current_category)
+                            added += 1
+                        else:
+                            skipped += 1
+                    self.refresh_tabs()
+                    
+                    msg = f"翻訳結果をプロンプト出力欄に反映し、{added}件のタグを新規保存しました。"
+                    if skipped:
+                        msg += f"\n（{skipped}件は既存タグのためスキップ）"
+                    messagebox.showinfo("翻訳完了", msg, parent=self.root)
+            
+            def show_translation_error(error_msg: str):
+                progress_dialog.destroy()
+                messagebox.showerror("翻訳エラー", f"翻訳中にエラーが発生しました:\n{error_msg}", parent=self.root)
+            
+            # 翻訳を別スレッドで実行
+            import threading
+            translate_thread = threading.Thread(target=translate_worker, daemon=True)
+            translate_thread.start()
+            
+        except ImportError as e:
+            messagebox.showerror("エラー", f"プロンプト翻訳モジュールの読み込みに失敗しました:\n{e}", parent=self.root)
+        except Exception as e:
+            messagebox.showerror("エラー", f"プロンプト翻訳の実行に失敗しました:\n{e}", parent=self.root)
+    
+    def get_low_confidence_tags(self, confidence_threshold: float = 0.5) -> List[Dict[str, Any]]:
+        """
+        低信頼度タグを検出する。
+        戻り値: [{"tag": "タグ名", "current_category": "現在のカテゴリ", "confidence": 0.3, "suggested_categories": [{"category": "カテゴリ名", "confidence": 0.8}]}]
+        """
+        try:
+            ai_predictor = get_ai_predictor()
+            all_tags = self.tag_manager.get_all_tags()
+            low_confidence_tags = []
+            
+            for tag_data in all_tags:
+                tag = tag_data["tag"]
+                current_category = tag_data["category"] or "未分類"
+                is_negative = tag_data["is_negative"]
+                
+                # ネガティブタグは除外
+                if is_negative:
+                    continue
+                
+                # AI予測で信頼度を計算
+                try:
+                    predicted_category, confidence, details = ai_predictor.predict_category_with_confidence(
+                        tag, confidence_threshold=confidence_threshold
+                    )
+                    
+                    # 信頼度が閾値以下の場合
+                    if confidence < confidence_threshold:
+                        # 推奨カテゴリを取得
+                        suggested_categories = []
+                        if "category_scores" in details:
+                            sorted_categories = sorted(
+                                details["category_scores"].items(), 
+                                key=lambda x: x[1], 
+                                reverse=True
+                            )
+                            suggested_categories = [
+                                {"category": cat, "confidence": score / sum(details["category_scores"].values())}
+                                for cat, score in sorted_categories[:3]
+                            ]
+                        
+                        low_confidence_tags.append({
+                            "tag": tag,
+                            "current_category": current_category,
+                            "confidence": confidence,
+                            "suggested_categories": suggested_categories,
+                            "details": details
+                        })
+                        
+                except Exception as e:
+                    # AI予測エラーの場合は信頼度0として扱う
+                    low_confidence_tags.append({
+                        "tag": tag,
+                        "current_category": current_category,
+                        "confidence": 0.0,
+                        "suggested_categories": [],
+                        "details": {"reason": f"AI予測エラー: {e}"}
+                    })
+            
+            # 信頼度の低い順にソート
+            low_confidence_tags.sort(key=lambda x: x["confidence"])
+            return low_confidence_tags
+            
+        except Exception as e:
+            self.logger.error(f"低信頼度タグ検出エラー: {e}")
+            return []
+
+    def show_low_confidence_tags_dialog(self) -> None:
+        """
+        低信頼度タグ管理ダイアログを表示する。
+        """
+        try:
+            # 設定から信頼度閾値を取得
+            from modules.customization import customization_manager
+            confidence_threshold = customization_manager.settings.get_setting("confidence_threshold", 0.7)
+            
+            # プログレスダイアログを表示
+            progress_dialog = ProgressDialog(self.root, "低信頼度タグを検出中...")
+            
+            def worker():
+                try:
+                    # 低信頼度タグを検出
+                    low_confidence_tags = self.get_low_confidence_tags(confidence_threshold)
+                    
+                    # UIスレッドでダイアログを表示
+                    self.root.after(0, lambda: show_dialog(low_confidence_tags))
+                    
+                except Exception as e:
+                    self.root.after(0, lambda: show_error(f"低信頼度タグ検出エラー: {e}"))
+                finally:
+                    self.root.after(0, progress_dialog.close)
+            
+            def show_dialog(tags: List[Dict[str, Any]]):
+                if not tags:
+                    messagebox.showinfo("低信頼度タグ", "信頼度の低いタグは見つかりませんでした。", parent=self.root)
+                    return
+                
+                # 低信頼度タグ管理ダイアログを表示
+                dialog = LowConfidenceTagsDialog(self.root, tags, confidence_threshold)
+                
+                if dialog.result:
+                    # カテゴリ変更を適用
+                    self.apply_low_confidence_tag_changes(dialog.result)
+            
+            def show_error(error_msg: str):
+                messagebox.showerror("エラー", error_msg, parent=self.root)
+            
+            # バックグラウンドで実行
+            threading.Thread(target=worker, daemon=True).start()
+            
+        except Exception as e:
+            self.logger.error(f"低信頼度タグダイアログ表示エラー: {e}")
+            messagebox.showerror("エラー", f"低信頼度タグダイアログの表示に失敗しました: {e}", parent=self.root)
+
+    def apply_low_confidence_tag_changes(self, changes: Dict[str, str]) -> None:
+        """
+        低信頼度タグのカテゴリ変更を適用する。
+        """
+        try:
+            changed_count = 0
+            
+            for tag, new_category in changes.items():
+                # 現在のカテゴリを取得
+                current_tags = self.tag_manager.get_all_tags()
+                current_tag_data = next((t for t in current_tags if t["tag"] == tag), None)
+                
+                if current_tag_data:
+                    current_category = current_tag_data["category"] or "未分類"
+                    
+                    # カテゴリが変更されている場合
+                    if current_category != new_category:
+                        # タグマネージャーでカテゴリを更新
+                        if self.tag_manager.set_category(tag, new_category):
+                            changed_count += 1
+                            
+                            # AI学習データに記録
+                            try:
+                                ai_predictor = get_ai_predictor()
+                                ai_predictor.usage_tracker.record_tag_usage(tag, new_category)
+                            except Exception as e:
+                                self.logger.error(f"AI学習データ記録エラー: {e}")
+            
+            if changed_count > 0:
+                # UIを更新
+                self.refresh_tabs()
+                messagebox.showinfo("完了", f"{changed_count}件のタグのカテゴリを変更しました。", parent=self.root)
+            else:
+                messagebox.showinfo("完了", "カテゴリの変更はありませんでした。", parent=self.root)
+                
+        except Exception as e:
+            self.logger.error(f"低信頼度タグ変更適用エラー: {e}")
+            messagebox.showerror("エラー", f"カテゴリ変更の適用に失敗しました: {e}", parent=self.root)
+
+    def clear_ai_cache(self) -> None:
+        """
+        AI予測キャッシュをクリアする
+        """
+        try:
+            ai_predictor = get_ai_predictor()
+            ai_predictor.clear_cache()
+            messagebox.showinfo("完了", "AI予測キャッシュをクリアしました。", parent=self.root)
+        except Exception as e:
+            self.logger.error(f"AIキャッシュクリアエラー: {e}")
+            messagebox.showerror("エラー", f"AIキャッシュのクリアに失敗しました: {e}", parent=self.root)
+
+    def show_ai_help(self) -> None:
+        """
+        AI機能についてのヘルプダイアログを表示する
+        """
+        help_dialog = Toplevel(self.root)
+        help_dialog.title("AI機能について")
+        help_dialog.geometry("600x500")
+        help_dialog.transient(self.root)
+        help_dialog.grab_set()
+        help_dialog.resizable(True, True)
+        
+        # メインフレーム
+        main_frame = tb.Frame(help_dialog, padding=10)
+        main_frame.pack(fill=tb.BOTH, expand=True)
+        
+        # スクロール可能なテキストウィジェット
+        text_frame = tb.Frame(main_frame)
+        text_frame.pack(fill=tb.BOTH, expand=True)
+        
+        text_widget = tk.Text(text_frame, wrap=tk.WORD, padx=10, pady=10)
+        scrollbar = tb.Scrollbar(text_frame, orient="vertical", command=text_widget.yview)
+        text_widget.configure(yscrollcommand=scrollbar.set)
+        
+        text_widget.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        
+        # ヘルプテキスト
+        help_text = """【AI機能について】
+
+■ AI予測機能
+・タグのカテゴリを自動予測します
+・機械学習による高精度な分類
+・外部データベースとの連携で精度向上
+・信頼度スコア付きで予測結果を表示
+
+■ AI学習データ可視化
+・AIの学習状況をリアルタイムで確認
+・タグ使用パターンの分析
+・予測精度の統計情報
+・学習データの詳細表示
+
+■ AI設定
+・予測機能のON/OFF切り替え
+・信頼度閾値の調整
+・自動提案機能の制御
+・学習機能の有効/無効設定
+
+■ カスタムキーワード管理
+・カテゴリ別のカスタムキーワード追加
+・キーワードの重み付け設定
+・予測精度の向上に貢献
+
+■ カスタムルール管理
+・条件付きカテゴリ割り当てルール
+・複雑な分類ロジックの定義
+・優先度付きルール適用
+
+■ 未分類タグの一括整理
+・AIによる自動カテゴリ割り当て
+・一括処理による効率化
+・結果の詳細確認と手動調整
+
+■ 選択タグの自動割り当て
+・選択したタグのカテゴリ自動割り当て
+・個別タグの精度向上
+・即座の結果確認
+
+【トラブルシューティング】
+
+■ AI機能が動作しない場合
+1. AI設定で機能が有効になっているか確認
+2. インターネット接続を確認（外部AI使用時）
+3. ローカルAIモデルの読み込み状況を確認
+4. 設定メニューからAI機能を無効化して再起動
+
+■ 予測精度が低い場合
+1. カスタムキーワードを追加
+2. カスタムルールを設定
+3. より多くのタグを使用して学習データを増やす
+4. 信頼度閾値を調整
+
+■ パフォーマンスが遅い場合
+1. ローカルAI機能を無効化
+2. 大量のタグ処理時は分割して実行
+3. 不要な学習データをクリア
+
+【推奨設定】
+
+■ 初回使用時
+・AI予測機能: ON
+・信頼度閾値: 0.7
+・自動提案: ON
+・学習機能: ON
+
+■ パフォーマンス重視
+・ローカルAI: OFF
+・信頼度閾値: 0.8
+・自動提案: OFF
+
+■ 高精度重視
+・ローカルAI: ON
+・信頼度閾値: 0.6
+・自動提案: ON
+・カスタムキーワードを積極的に追加
+
+【データ管理】
+
+■ 学習データのバックアップ
+・AI設定から学習データをエクスポート
+・定期的なバックアップを推奨
+・復元時はインポート機能を使用
+
+■ カスタム設定の共有
+・カスタムキーワードとルールをエクスポート
+・他の環境での設定復元が可能
+・チーム開発での設定共有に活用
+
+【技術情報】
+
+■ 使用技術
+・機械学習（scikit-learn）
+・自然言語処理（HuggingFace）
+・外部API連携（Google翻訳等）
+・ローカルAIモデル（Sentence Transformers）
+
+■ データ形式
+・JSON形式でのデータ保存
+・UTF-8エンコーディング
+・バージョン管理対応
+・互換性保証
+
+■ セキュリティ
+・ローカルデータのみ使用
+・外部API使用時はHTTPS通信
+・個人情報の暗号化対応
+・データの完全削除機能
+
+【サポート】
+
+■ 問題が解決しない場合
+1. ログファイルを確認
+2. 設定をリセットして再試行
+3. アプリケーションを再起動
+4. データベースの再初期化
+
+■ 機能改善の提案
+・GitHubのIssuesで報告
+・詳細な再現手順を記載
+・環境情報を含めて報告
+
+AI機能についての詳細な説明でした。
+ご不明な点がございましたら、お気軽にお問い合わせください。"""
+        
+        text_widget.insert(tk.END, help_text)
+        text_widget.config(state=tk.DISABLED)
+        
+        # 閉じるボタン
+        button_frame = tb.Frame(main_frame)
+        button_frame.pack(fill=tb.X, pady=(10, 0))
+        tb.Button(button_frame, text="閉じる", command=help_dialog.destroy, bootstyle="primary").pack(side=tk.RIGHT)
+
+    def export_personal_data(self) -> None:
+        """
+        個人データを包括的にエクスポートする
+        """
+        export_personal_data(self)
+
+    def import_personal_data(self) -> None:
+        """
+        個人データを包括的にインポートする
+        """
+        import_personal_data(self)
+
+    def _get_last_backup_date(self) -> str:
+        """
+        最後のバックアップ日を取得する
+        """
+        try:
+            backup_dir = getattr(self, 'backup_dir', 'backup')
+            if os.path.exists(backup_dir):
+                backup_files = [f for f in os.listdir(backup_dir) if f.endswith('.db')]
+                if backup_files:
+                    latest_file = max(backup_files, key=lambda f: os.path.getmtime(os.path.join(backup_dir, f)))
+                    timestamp = os.path.getmtime(os.path.join(backup_dir, latest_file))
+                    return datetime.fromtimestamp(timestamp).isoformat()
+        except Exception:
+            pass
+        return "不明"
+
 
 # --- ツールチップ用ヘルパー ---
 class ToolTip:

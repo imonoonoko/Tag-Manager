@@ -77,6 +77,10 @@ def save_category_keywords(category_keywords: Dict[str, List[str]]) -> bool:
     """
     カテゴリキーワード設定ファイルを保存する
     """
+    # Noneの場合は保存を拒否
+    if category_keywords is None:
+        return False
+    
     try:
         os.makedirs(os.path.dirname(CATEGORY_KEYWORDS_FILE), exist_ok=True)
         with open(CATEGORY_KEYWORDS_FILE, 'w', encoding='utf-8') as f:
@@ -109,6 +113,10 @@ def calculate_keyword_score(tag: str, keyword: str) -> int:
     タグとキーワードの一致度をスコア化する純粋関数
     """
     import re
+    
+    # Noneや空文字列はスコアを0にする
+    if tag is None or keyword is None or tag.strip() == "" or keyword.strip() == "":
+        return 0
     
     # 一般的すぎる単語はスコアを0にする
     if tag.lower().strip() in COMMON_WORDS or keyword.lower().strip() in COMMON_WORDS:
@@ -153,6 +161,10 @@ def add_category_keyword(category: str, keyword: str) -> bool:
     """
     カテゴリにキーワードを追加する
     """
+    # Noneや空文字列は追加を拒否
+    if keyword is None or keyword.strip() == "":
+        return False
+    
     # 一般的すぎる単語は追加を拒否
     if keyword.lower().strip() in COMMON_WORDS:
         return False

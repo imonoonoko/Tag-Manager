@@ -152,6 +152,20 @@ run_tests.bat
 - **進捗管理**: `ToDoリスト.md`
 - **自動チェック**: `check_spec.bat`
 
+## 🛡️ 自動不具合防止・仕様整合性チェック
+
+- コード変更時は `check_spec.bat` または `python scripts/check_spec_compliance.py` を必ず実行し、
+  技術仕様書・実装・インポート等の整合性を自動チェックしてください。
+- チェックロジックは `modules/spec_checker/` 配下の各モジュールに分割されており、
+  関数・クラス・ファイルパス・インポートの仕様逸脱や不整合を自動検出します。
+- 詳細は `AI_REFERENCE_GUIDE.md` も参照してください。
+
+## 💾 バックアップファイルの命名規則・運用
+
+- 本番用バックアップDBは `tags_backup_YYYYMMDD_HHMMSS.db` 形式で保存
+- テスト用DBは `test_` プレフィックスまたは `tags_backup_coverage_` などで始まり、必ず `backup/test/` 配下に保存
+- backup/cleanup_backup.py で30日以上前のバックアップや不要ファイルを自動削除
+
 ## 🤝 貢献
 
 1. このリポジトリをフォーク
@@ -160,9 +174,42 @@ run_tests.bat
 4. ブランチにプッシュ (`git push origin feature/AmazingFeature`)
 5. プルリクエストを作成
 
+## ⚠️ 重要: 利用制限
+
+### 商用利用について
+- **研究目的・個人利用**: 可能
+- **商用利用**: 別途法的確認が必要
+
+### 利用規約
+- 本ソフトウェアは研究目的・個人利用を想定しています
+- 商用利用を検討される場合は、専門の法律家に相談してください
+- 外部APIの利用規約を遵守してください
+
+詳細は `USAGE_TERMS.md` ファイルを参照してください。
+
 ## 📄 ライセンス
 
-このプロジェクトはMITライセンスの下で公開されています。詳細は `LICENSE` ファイルを参照してください。
+このプロジェクトはMITライセンスの下で公開されています。
+
+### ライセンス概要
+- **プロジェクト**: MIT License
+- **主要ライブラリ**: ttkbootstrap (MIT), transformers (Apache-2.0), torch (BSD-3-Clause)
+- **外部API**: Hugging Face (条件付き商用利用)
+
+### 使用モデル（Hugging Face）
+- **sentence-transformers/all-MiniLM-L6-v2**: Apache-2.0
+- **sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2**: Apache-2.0
+- **sentence-transformers/all-mpnet-base-v2**: Apache-2.0
+- **sentence-transformers/paraphrase-multilingual-mpnet-base-v2**: Apache-2.0
+- **pkshatech/GLuCoSE-base-ja**: Apache-2.0
+
+### 商用利用に関する重要事項
+⚠️ **商用利用を検討される場合は、以下の点にご注意ください：**
+
+1. **Hugging Face**: 商用利用可能なライセンスのモデルを選択しています
+2. **法的アドバイス**: 商用利用前は専門の法律家に相談することを強く推奨します
+
+詳細は `LICENSE.md` と `THIRD_PARTY_LICENSES.txt` ファイルを参照してください。
 
 ## 🆘 サポート
 
@@ -171,3 +218,32 @@ run_tests.bat
 ---
 
 **Tag Manager** - AI画像生成のための効率的なタグ管理ツール
+
+## 🗂️ ドキュメント・アーカイブ整理ルール
+
+- `archive/` 配下は「廃止・参考」資料専用。現役で使う設計・仕様は必ずプロジェクトルートやdocs/に置く。
+- 設計メモや運用ルールは「現役：プロジェクトルート」「参考：archive/」「廃止：archive/内で明示」
+- READMEやAI_REFERENCE_GUIDE.mdから現役/参考/廃止の区分を明記し、リンクを整理
+
+## 🛠️ スクリプト用途・運用区分
+
+- `scripts/performance_monitor.py` … アプリケーションのパフォーマンス監視・分析用（現役・必要に応じて利用）
+- その他のスクリプトも用途・現役/参考/廃止区分をファイル先頭コメントやREADMEで明示
+
+## 🆕 カテゴリ自動拡充機能
+
+- `scripts/auto_expand_categories.py` を実行することで、Stable Diffusionプロンプト等の外部データから頻出キーワードを自動抽出し、最適なカテゴリへ自動分類・追加できます。
+- 既存カテゴリ構造は維持され、タグ自体は増やさずキーワードのみが追加されます。
+- 外部データセットは `backup/external_datasets/` に保存され、差分バックアップも `backup/` に自動生成されます。
+- 実行ログは `logs/auto_expand_categories.log` に記録されます。
+
+### 使い方
+1. `python scripts/auto_expand_categories.py` を実行
+2. 外部データセットが自動ダウンロード・保存されます
+3. 新規キーワードが最適なカテゴリに自動追加されます
+4. 追加前後の `category_keywords.json` は `backup/` にバックアップされます
+
+### 注意点
+- カテゴリ構造は変更されません。新規カテゴリ追加は手動で行ってください
+- 外部データセットは再利用可能な形で保存されます
+- 既存キーワードと重複するものは追加されません

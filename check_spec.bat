@@ -1,96 +1,72 @@
 @echo off
-chcp 65001 >nul
-echo 🚀 技術仕様書との整合性チェックを開始...
+echo ========================================
+echo 自動不具合防止・仕様整合性チェック開始
+echo ========================================
+
 echo.
-
-REM Pythonスクリプトの実行
-if exist "scripts\check_spec_compliance.py" (
-    echo 📋 Pythonスクリプトでチェック実行中...
-    python scripts\check_spec_compliance.py
-    if errorlevel 1 (
-        echo.
-        echo ❌ チェックで問題が見つかりました
-        echo 技術仕様書とAI_REFERENCE_GUIDE.mdを確認してください
-        pause
-        exit /b 1
-    )
-) else (
-    echo ⚠️  check_spec_compliance.py が見つかりません
+echo [1/6] 重複関数定義チェック...
+python scripts/check_duplicate_functions.py modules
+if %errorlevel% neq 0 (
+    echo 重複関数定義が見つかりました。修正が必要です。
+    pause
+    exit /b 1
 )
+echo 重複関数定義チェック完了
 
-REM 必須ファイルの存在確認
 echo.
-echo 📋 必須ファイルの存在確認...
-if not exist "技術仕様書_関数・ファイルパス一覧.md" (
-    echo ❌ 技術仕様書_関数・ファイルパス一覧.md が見つかりません
-    set /a error_count+=1
-) else (
-    echo ✅ 技術仕様書_関数・ファイルパス一覧.md
+echo [2/6] 包括的コード品質チェック（改良版）...
+python scripts/check_code_quality.py modules --no-mypy --no-pytest
+if %errorlevel% neq 0 (
+    echo コード品質の問題が見つかりました。修正が必要です。
+    pause
+    exit /b 1
 )
+echo 包括的コード品質チェック完了
 
-if not exist "AI_REFERENCE_GUIDE.md" (
-    echo ❌ AI_REFERENCE_GUIDE.md が見つかりません
-    set /a error_count+=1
-) else (
-    echo ✅ AI_REFERENCE_GUIDE.md
-)
-
-if not exist "ToDoリスト.md" (
-    echo ❌ ToDoリスト.md が見つかりません
-    set /a error_count+=1
-) else (
-    echo ✅ ToDoリスト.md
-)
-
-REM 重要なモジュールファイルの確認
 echo.
-echo 📁 重要なモジュールファイルの確認...
-if not exist "modules\ui_main.py" (
-    echo ❌ modules\ui_main.py が見つかりません
-    set /a error_count+=1
-) else (
-    echo ✅ modules\ui_main.py
+echo [3/6] 仕様書整合性チェック...
+python scripts/check_spec_compliance.py
+if %errorlevel% neq 0 (
+    echo 仕様書整合性チェックでエラーが発生しました。
+    pause
+    exit /b 1
 )
+echo 仕様書整合性チェック完了
 
-if not exist "modules\tag_manager.py" (
-    echo ❌ modules\tag_manager.py が見つかりません
-    set /a error_count+=1
-) else (
-    echo ✅ modules\tag_manager.py
+echo.
+echo [4/6] 型チェック...
+python -m mypy modules/ --strict
+if %errorlevel% neq 0 (
+    echo 型チェックでエラーが発生しました。
+    pause
+    exit /b 1
 )
+echo 型チェック完了
 
-if not exist "modules\dialogs.py" (
-    echo ❌ modules\dialogs.py が見つかりません
-    set /a error_count+=1
-) else (
-    echo ✅ modules\dialogs.py
+echo.
+echo [5/6] テスト実行...
+python -m pytest tests/ -v
+if %errorlevel% neq 0 (
+    echo テストでエラーが発生しました。
+    pause
+    exit /b 1
 )
+echo テスト完了
 
-if not exist "modules\theme_manager.py" (
-    echo ❌ modules\theme_manager.py が見つかりません
-    set /a error_count+=1
-) else (
-    echo ✅ modules\theme_manager.py
+echo.
+echo [6/6] 構文チェック...
+python -m py_compile modules/ui_main.py
+python -m py_compile modules/tag_manager.py
+python -m py_compile modules/ai_predictor.py
+if %errorlevel% neq 0 (
+    echo 構文チェックでエラーが発生しました。
+    pause
+    exit /b 1
 )
-
-if not exist "modules\constants.py" (
-    echo ❌ modules\constants.py が見つかりません
-    set /a error_count+=1
-) else (
-    echo ✅ modules\constants.py
-)
+echo 構文チェック完了
 
 echo.
 echo ========================================
-
-if defined error_count (
-    echo ❌ %error_count% 個の問題が見つかりました
-    echo 技術仕様書とAI_REFERENCE_GUIDE.mdを確認してください
-    pause
-    exit /b 1
-) else (
-    echo 🎉 すべてのチェックが完了しました！
-    echo 技術仕様書との整合性が確認されました
-)
-
+echo 全てのチェックが完了しました！
+echo ========================================
 pause 

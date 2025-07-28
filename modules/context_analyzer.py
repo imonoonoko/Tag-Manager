@@ -3,6 +3,8 @@
 """
 from typing import Dict, List, Any, Tuple
 from .common_words import COMMON_WORDS
+import json
+import os
 
 # コンテキスト認識用の同義語・類義語マッピング
 SYNONYM_MAPPING = {
@@ -217,3 +219,26 @@ def get_context_rules_for_category(category: str) -> List[Tuple[str, Dict[str, A
         if category in [cat1, cat2]:
             rules.append((f"{cat1} + {cat2}", rule))
     return rules 
+
+def merge_auto_synonyms(auto_syn_path: str = "backup/auto_synonyms.json", output_path: str = "backup/merged_synonyms.json"):
+    """
+    auto_expand_synonymsで生成したjsonを既存SYNONYM_MAPPINGにマージし、結果をjsonで保存
+    - 既存SYNONYM_MAPPINGと重複しないもののみ追加
+    """
+    if not os.path.exists(auto_syn_path):
+        print(f"[WARN] {auto_syn_path} が存在しません")
+        return
+    with open(auto_syn_path, "r", encoding="utf-8") as f:
+        auto_map = json.load(f)
+    merged = dict(SYNONYM_MAPPING)  # 既存をコピー
+    added_count = 0
+    for tag, syns in auto_map.items():
+        if tag not in merged:
+            merged[tag] = syns
+            added_count += 1
+        else:
+            # 既存と重複しないもののみ追加
+            merged[tag] = list(set(merged[tag]) | set(syns))
+    with open(output_path, "w", encoding="utf-8") as f:
+        json.dump(merged, f, ensure_ascii=False, indent=2)
+    print(f"[INFO] マージ済みSYNONYM_MAPPINGを{output_path}に保存しました（新規追加{added_count}タグ）") 

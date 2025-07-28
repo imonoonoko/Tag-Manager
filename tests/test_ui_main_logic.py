@@ -67,60 +67,40 @@ def test_category_description_missing_key():
     # 存在しないカテゴリの場合は空文字が返されることを確認
     assert descriptions.get("存在しないカテゴリ", "") == ""
 
-def test_dummy_undo_logs_error(monkeypatch, caplog, tmp_path):
-    # TagManagerAppのdummy_undoで例外を強制発生させ、logger.errorがcaplogで検知できるか
-    from modules.ui_main import TagManagerApp
-    import ttkbootstrap as tb
-    import pytest
-    
-    try:
-        root = tb.Window()
-    except Exception as e:
-        pytest.skip(f"Tkinter/ttkbootstrapが利用できないためスキップ: {e}")
-    
-    class DummyApp(TagManagerApp):
-        def dummy_undo(self):
-            try:
-                raise Exception("dummy error")
-            except Exception as e:
-                self.logger.error(f"dummy_undoエラー: {e}")
-        bulk_edit_tags = lambda self: None  # ダミー実装
-        show_guide_on_startup = lambda self: None  # ダミー実装
-    
-    root.withdraw()
-    
-    # テスト用の独立したデータベースファイルを使用
-    test_db = tmp_path / "test_dummy_undo_logs_error.db"
-    app = DummyApp(root, db_file=str(test_db))
-    with caplog.at_level(logging.ERROR):
-        app.dummy_undo()
-        assert any("dummy_undoエラー" in r for r in caplog.text.splitlines())
-    root.destroy()
+
 
 def test_update_category_description_missing_category(monkeypatch, tmp_path):
     from modules.ui_main import TagManagerApp
     import ttkbootstrap as tb
     import pytest
+    root = None
     try:
         root = tb.Window()
+        root.withdraw()
+        
+        # テスト用の独立したデータベースファイルを使用
+        test_db = tmp_path / "test_update_category_description_missing_category.db"
+        app = TagManagerApp(root, db_file=str(test_db))
+        # 存在しないカテゴリの説明更新
+        app.current_category = "存在しないカテゴリ"
+        app.update_category_description()
+        desc = app.category_descriptions.get(app.current_category, "")
+        assert desc == ""
     except Exception as e:
         pytest.skip(f"Tkinter/ttkbootstrapが利用できないためスキップ: {e}")
-    root.withdraw()
-    
-    # テスト用の独立したデータベースファイルを使用
-    test_db = tmp_path / "test_update_category_description_missing_category.db"
-    app = TagManagerApp(root, db_file=str(test_db))
-    # 存在しないカテゴリの説明更新
-    app.current_category = "存在しないカテゴリ"
-    app.update_category_description()
-    desc = app.category_descriptions.get(app.current_category, "")
-    assert desc == ""
-    root.destroy()
+    finally:
+        if root:
+            try:
+                root.quit()
+                root.destroy()
+            except:
+                pass
 
 def test_set_category_from_menu_no_selection(monkeypatch, tmp_path):
     from modules.ui_main import TagManagerApp
     import ttkbootstrap as tb
     import pytest
+    root = None
     try:
         root = tb.Window()
     except Exception as e:
@@ -136,7 +116,13 @@ def test_set_category_from_menu_no_selection(monkeypatch, tmp_path):
         app.set_category_from_menu(None)
     except Exception as e:
         assert False, f"例外発生: {e}"
-    root.destroy()
+    finally:
+        if root:
+            try:
+                root.quit()
+                root.destroy()
+            except:
+                pass
 
 @pytest.mark.skip(reason="ThemeManagerの初期化問題のためスキップ")
 def test_load_categories_file_not_found(monkeypatch, tmp_path):

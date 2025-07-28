@@ -67,4 +67,18 @@ DEFAULT_CATEGORIES = [
 
 # ファイル拡張子
 SUPPORTED_IMPORT_FORMATS = [".json", ".csv"]
-SUPPORTED_EXPORT_FORMATS = [".json", ".csv", ".txt"] 
+SUPPORTED_EXPORT_FORMATS = [".json", ".csv", ".txt"]
+
+# Hugging Face設定
+HUGGINGFACE_ENABLED = True  # 商用利用可能なライセンスのモデルのみ
+HUGGINGFACE_CACHE_TTL = 30  # キャッシュ有効期限（日）
+HUGGINGFACE_MODELS = [
+    "sentence-transformers/all-MiniLM-L6-v2",
+    "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+    "sentence-transformers/all-mpnet-base-v2",
+    "sentence-transformers/paraphrase-multilingual-mpnet-base-v2"
+]
+
+# 研究目的・個人利用制限
+RESEARCH_ONLY_MODE = True  # 研究目的・個人利用限定
+COMMERCIAL_USE_WARNING = True  # 商用利用警告 

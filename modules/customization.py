@@ -242,8 +242,14 @@ class CustomRuleManager:
         """
         カスタムルールを削除する
         """
+        original_count = len(self.custom_rules)
         self.custom_rules = [rule for rule in self.custom_rules if rule["id"] != rule_id]
-        return self.save_custom_rules()
+        
+        # ルールが実際に削除されたかチェック
+        if len(self.custom_rules) < original_count:
+            return self.save_custom_rules()
+        else:
+            return False
     
     def get_custom_rules(self, rule_type: str = None):
         """
@@ -338,14 +344,14 @@ class CustomizationManager:
         rule_results = self.rule_manager.evaluate_custom_rules(tag, context_tags)
         
         for rule_id, action in rule_results.items():
-            action_type = action.get("type", "score_boost")
+            action_type = action.get("type", "boost_score")
             
-            if action_type == "score_boost":
-                boost = action.get("boost", 0)
+            if action_type == "boost_score":
+                boost = action.get("value", 0)
                 modified_score += boost
             
             elif action_type == "score_multiply":
-                multiplier = action.get("multiplier", 1.0)
+                multiplier = action.get("value", 1.0)
                 modified_score *= multiplier
             
             elif action_type == "category_override":
@@ -391,4 +397,24 @@ def apply_custom_rules(tag: str, category: str, base_score: float, context_tags:
     if tag.lower().strip() in COMMON_WORDS:
         return base_score
     
-    return customization_manager.apply_custom_rules_to_score(tag, category, base_score, context_tags) 
+    return customization_manager.apply_custom_rules_to_score(tag, category, base_score, context_tags)
+
+def get_custom_category(tag: str) -> Optional[str]:
+    """
+    カスタムルールからカテゴリを取得する（カテゴリ判定用）
+    """
+    # 一般的すぎる単語はカスタムルールを適用しない
+    if tag.lower().strip() in COMMON_WORDS:
+        return None
+    
+    # カスタムルールを評価
+    rule_results = customization_manager.rule_manager.evaluate_custom_rules(tag)
+    
+    for rule_id, action in rule_results.items():
+        action_type = action.get("type", "score_boost")
+        
+        if action_type == "category_override":
+            # カテゴリを強制的に変更
+            return action.get("category", None)
+    
+    return None 

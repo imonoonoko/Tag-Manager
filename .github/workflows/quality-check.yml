@@ -1,0 +1,74 @@
+name: Quality Check
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  quality-check:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+      
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.8'
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install mypy pytest
+        
+    - name: Create necessary directories
+      run: |
+        mkdir -p logs
+        mkdir -p backup
+        mkdir -p data
+        
+    - name: Run duplicate function check
+      run: |
+        echo "🔍 Checking for duplicate function definitions..."
+        python scripts/check_duplicate_functions.py modules
+        
+    - name: Run comprehensive code quality check
+      run: |
+        echo "🔍 Running comprehensive code quality check..."
+        python scripts/check_code_quality.py modules --no-mypy --no-pytest
+        
+    - name: Run specification compliance check
+      run: |
+        echo "📖 Checking specification compliance..."
+        python scripts/check_spec_compliance.py
+        
+    - name: Run syntax check
+      run: |
+        echo "🔧 Checking syntax..."
+        python -m py_compile modules/ui_main.py
+        python -m py_compile modules/tag_manager.py
+        python -m py_compile modules/ai_predictor.py
+        
+    - name: Run type check
+      run: |
+        echo "🔍 Running type check..."
+        mypy modules/ --strict
+        
+    - name: Run tests
+      run: |
+        echo "🧪 Running tests..."
+        pytest tests/ -v
+        
+    - name: Upload quality report
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: quality-report
+        path: |
+          logs/
+          backup/
+        retention-days: 7 

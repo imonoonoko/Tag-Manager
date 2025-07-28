@@ -344,6 +344,20 @@ class TagManager:
             print(f"タグ存在チェックエラー: {e}")
             # テスト環境でも例外をraiseせずFalseを返す
             return False
+    
+    def tag_exists(self, tag: str, is_negative: bool = False) -> bool:
+        """
+        指定されたタグが存在するかどうかをチェックする（is_negativeを考慮）。
+        """
+        try:
+            cursor = self._execute_query(
+                "SELECT 1 FROM tags WHERE tag = ? AND is_negative = ?", 
+                (tag, int(is_negative))
+            )
+            return cursor.fetchone() is not None
+        except sqlite3.Error as e:
+            self.logger.error(f"タグ存在チェックエラー: {e}")
+            return False
 
     def delete_tag(self, tag: str, is_negative: bool = False) -> bool:
         """
@@ -466,6 +480,29 @@ class TagManager:
             self.logger.error(f"一括カテゴリ設定に失敗しました: {e}")
             messagebox.showerror("エラー", f"一括カテゴリ設定に失敗しました:\n{e}", parent=self.parent)
             return False
+
+    def get_tags_by_category(self, category: str, is_negative: bool = False) -> List[Dict[str, Any]]:
+        """
+        指定されたカテゴリのタグを取得する。
+        失敗時は空リストを返し、logger.errorで記録。
+        """
+        try:
+            cursor = self._execute_query(
+                "SELECT tag, jp, favorite, category FROM tags WHERE category = ? AND is_negative = ? ORDER BY tag",
+                (category, int(is_negative))
+            )
+            tags = []
+            for row in cursor.fetchall():
+                tags.append({
+                    "tag": row[0],
+                    "jp": row[1],
+                    "favorite": bool(row[2]),
+                    "category": row[3]
+                })
+            return tags
+        except sqlite3.Error as e:
+            self.logger.error(f"カテゴリ別タグ取得に失敗しました: {e}")
+            return []
 
 
 
