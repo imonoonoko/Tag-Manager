@@ -165,3 +165,62 @@ backup/local_hf_cache/
 # Backup files
 *.bak
 *.backup
+
+# Personal data - 個人データ（絶対にGitにアップロードしない）
+data/
+backup/
+logs/
+*.db
+*.sqlite
+*.sqlite3
+
+# User settings and personal configurations
+user_settings.json
+personal_config.json
+custom_settings.json
+user_preferences.json
+
+# AI learning data - AI学習データ
+ai_learning_data.json
+ai_usage_data.json
+ai_prediction_cache.json
+ai_model_cache.json
+
+# Tag data - タグデータ
+tags_export.json
+tags_backup.json
+personal_tags.json
+user_tags.json
+
+# Custom keywords and rules - カスタムキーワード・ルール
+custom_keywords.json
+custom_rules.json
+user_keywords.json
+user_rules.json
+
+# Export/Import data - エクスポート・インポートデータ
+exported_data.json
+imported_data.json
+personal_data_export.json
+user_data_export.json
+
+# Cache files - キャッシュファイル
+cache/
+*.cache
+*.cache.json
+embedding_cache.json
+similarity_cache.json
+
+# User-specific files - ユーザー固有ファイル
+user_*
+personal_*
+my_*
+*.user
+*.personal
+*.my
+
+# Session and temporary user data - セッション・一時ユーザーデータ
+session_data.json
+temp_user_data.json
+*.session
+*.temp
