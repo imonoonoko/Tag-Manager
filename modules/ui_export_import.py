@@ -21,7 +21,7 @@ import time
 from typing import Any, Dict, List, Optional, Callable, cast, Tuple
 import webbrowser
 
-from .ui_dialogs import ProgressDialog
+from modules.ui_dialogs import ProgressDialog
 
 def export_personal_data(app_instance: Any) -> None:
     """個人データ包括的エクスポート機能"""

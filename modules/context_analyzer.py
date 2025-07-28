@@ -2,7 +2,7 @@
 コンテキスト分析機能
 """
 from typing import Dict, List, Any, Tuple
-from .common_words import COMMON_WORDS
+from modules.common_words import COMMON_WORDS
 import json
 import os
 

@@ -4,8 +4,8 @@
 import json
 import os
 from typing import Dict, List, Optional, Tuple, Any
-from .config import CATEGORY_KEYWORDS_FILE
-from .common_words import COMMON_WORDS
+from modules.config import CATEGORY_KEYWORDS_FILE
+from modules.common_words import COMMON_WORDS
 
 # カテゴリ優先度（数値が小さいほど優先度が高い）
 CATEGORY_PRIORITIES = {

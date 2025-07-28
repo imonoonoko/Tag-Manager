@@ -162,7 +162,7 @@ def make_set_category_command(app_instance: Any, category: str) -> Callable[[], 
 def make_export_tags_command(app_instance: Any, tree: Any) -> Callable[[], None]:
     """タグエクスポートコマンドを生成"""
     def cmd() -> None:
-        from .ui_export_import import export_tags
+        from modules.ui_export_import import export_tags
         export_tags(app_instance, tree)
     return cmd
 

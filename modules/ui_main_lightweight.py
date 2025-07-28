@@ -23,14 +23,14 @@ from modules.ai_predictor import predict_category_ai, suggest_similar_tags_ai
 from modules.customization import get_customized_category_keywords, apply_custom_rules
 
 # 分離されたモジュールからインポート
-from .ui_dialogs import ProgressDialog, ToolTip, show_help_dialog, show_about_dialog, show_license_info_dialog, show_shortcuts_dialog
-from .ui_export_import import export_personal_data, import_personal_data, export_tags, export_all_tags, backup_database
-from .ui_ai_features import (
+from modules.ui_dialogs import ProgressDialog, ToolTip, show_help_dialog, show_about_dialog, show_license_info_dialog, show_shortcuts_dialog
+from modules.ui_export_import import export_personal_data, import_personal_data, export_tags, export_all_tags, backup_database
+from modules.ui_ai_features import (
     show_ai_prediction_dialog, show_ai_settings_dialog, show_custom_keywords_dialog,
     show_custom_rules_dialog, show_ai_learning_data_dialog, show_ai_help_dialog,
     auto_assign_selected_tags, auto_assign_uncategorized_tags
 )
-from .ui_utils import (
+from modules.ui_utils import (
     build_category_list, build_category_descriptions, filter_tags_optimized,
     sort_prompt_by_priority, format_output_text, strip_weight_from_tag,
     is_float, extract_tags_from_prompt, make_theme_menu_command,

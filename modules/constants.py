@@ -7,20 +7,20 @@ import os
 from typing import Any, Dict, Optional, List, Tuple
 
 # 基本設定（config.pyからインポート）
-from .config import (
+from modules.config import (
     POSITIVE_PROMPT_FILE, NEGATIVE_PROMPT_FILE, DB_FILE, THEME_FILE,
     TRANSLATING_PLACEHOLDER, CATEGORY_KEYWORDS_FILE
 )
 
 # カテゴリ管理機能（category_manager.pyからインポート）
-from .category_manager import (
+from modules.category_manager import (
     load_category_keywords, CATEGORY_PRIORITIES, KEYWORD_WEIGHTS,
     calculate_keyword_score, get_category_priority, get_all_categories,
     is_valid_category, get_category_keywords, add_category_keyword, remove_category_keyword
 )
 
 # コンテキスト分析機能（context_analyzer.pyからインポート）
-from .context_analyzer import (
+from modules.context_analyzer import (
     SYNONYM_MAPPING, CONTEXT_BOOST_RULES, NEGATION_WORDS, MODIFIER_WORDS,
     analyze_tag_context, calculate_context_boost, get_synonyms,
     has_negation, has_modifier, extract_color_keywords, extract_style_keywords,
@@ -28,12 +28,12 @@ from .context_analyzer import (
 )
 
 # AI予測機能（ai_predictor.pyからインポート）
-from .ai_predictor import (
+from modules.ai_predictor import (
     predict_category_ai, suggest_similar_tags_ai, ai_predictor
 )
 
 # ユーザーカスタマイズ機能（customization.pyからインポート）
-from .customization import (
+from modules.customization import (
     get_customized_category_keywords, apply_custom_rules, customization_manager
 )
 
@@ -48,7 +48,7 @@ def safe_load_json(filepath: str) -> Optional[Any]:
     except Exception:
         return None
 
-from .common_words import COMMON_WORDS
+from modules.common_words import COMMON_WORDS
 
 def auto_assign_category_context_aware_pure(
     tag: Optional[str],

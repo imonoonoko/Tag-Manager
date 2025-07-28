@@ -4,8 +4,8 @@
 import json
 import os
 from typing import Dict, List, Optional, Any
-from .config import BACKUP_DIR
-from .common_words import COMMON_WORDS
+from modules.config import BACKUP_DIR
+from modules.common_words import COMMON_WORDS
 
 # ユーザー設定ファイル
 USER_SETTINGS_FILE = os.path.join(BACKUP_DIR, "user_settings.json")

@@ -224,3 +224,11 @@ session_data.json
 temp_user_data.json
 *.session
 *.temp
+
+# Large executable files (exceed GitHub's 100MB limit)
+*.exe
+Tag-Manager-Booth/
+Tag-Manager-Distribution/
+Tag-Manager-Booth.zip
+Tag-Manager-Installer-*.zip
+Tag-Manager-Portable-*.zip

@@ -33,7 +33,7 @@ except ImportError as e:
     logging.warning(f"Hugging Face Transformersがインストールされていません。高度なNLP機能は無効です。エラー: {e}")
     print(f"Hugging Face依存関係の読み込みに失敗: {e}")
 
-from .config import BACKUP_DIR
+from modules.config import BACKUP_DIR
 
 # 設定
 HF_MODELS_DIR = os.path.join(BACKUP_DIR, "hf_models")

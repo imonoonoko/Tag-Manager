@@ -9,7 +9,7 @@ import logging
 from typing import Dict, List, Optional, Tuple, Any
 from collections import defaultdict
 from deep_translator import GoogleTranslator
-from .config import BACKUP_DIR
+from modules.config import BACKUP_DIR
 
 # 翻訳キャッシュファイル
 TRANSLATION_CACHE_FILE = os.path.join(BACKUP_DIR, "translation_cache.json")

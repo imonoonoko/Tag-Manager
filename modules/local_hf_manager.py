@@ -40,7 +40,7 @@ except ImportError as e:
     logging.warning(f"Hugging Face Transformersがインストールされていません。ローカルAI機能は無効です。エラー: {e}")
     print(f"Local Hugging Face依存関係の読み込みに失敗: {e}")
 
-from .config import BACKUP_DIR
+from modules.config import BACKUP_DIR
 
 # 商用利用可能なモデル設定
 COMMERCIAL_MODELS = {

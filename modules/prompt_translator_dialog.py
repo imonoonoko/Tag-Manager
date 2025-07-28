@@ -10,7 +10,8 @@ from typing import Any, Dict, List, Optional, Callable
 import threading
 import time
 
-from .prompt_translator import prompt_translator
+from modules.prompt_translator import PromptTranslator
+prompt_translator = PromptTranslator()
 
 class PromptTranslatorDialog:
     """

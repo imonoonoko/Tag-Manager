@@ -7,12 +7,12 @@ import os
 import time
 from typing import Dict, List, Optional, Tuple, Any
 from collections import defaultdict, Counter
-from .config import BACKUP_DIR
-from .category_manager import load_category_keywords, CATEGORY_PRIORITIES, calculate_keyword_score
-from .context_analyzer import analyze_tag_context, calculate_context_boost
-from .common_words import COMMON_WORDS
-from .customization import get_customized_category_keywords, apply_custom_rules, customization_manager, get_custom_category
-from .context_analyzer import get_synonyms
+from modules.config import BACKUP_DIR
+from modules.category_manager import load_category_keywords, CATEGORY_PRIORITIES, calculate_keyword_score
+from modules.context_analyzer import analyze_tag_context, calculate_context_boost
+from modules.common_words import COMMON_WORDS
+from modules.customization import get_customized_category_keywords, apply_custom_rules, customization_manager, get_custom_category
+from modules.context_analyzer import get_synonyms
 # 遅延読み込みのため、グローバルインポートを削除
 # from .huggingface_manager import hf_manager
 # from .local_hf_manager import local_hf_manager
@@ -227,7 +227,7 @@ class AIPredictor:
                 return None
             
             try:
-                from .huggingface_manager import HuggingFaceManager
+                from modules.huggingface_manager import HuggingFaceManager
                 print("HuggingFace Managerを初期化中...")
                 self._hf_manager = HuggingFaceManager()
                 
@@ -255,7 +255,7 @@ class AIPredictor:
                 return None
             
             try:
-                from .local_hf_manager import LocalHuggingFaceManager
+                from modules.local_hf_manager import LocalHuggingFaceManager
                 print("Local HuggingFace Managerを初期化中...")
                 self._local_hf_manager = LocalHuggingFaceManager()
                 

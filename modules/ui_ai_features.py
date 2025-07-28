@@ -15,7 +15,7 @@ import logging
 from typing import Any, Dict, List, Optional, Callable, cast, Tuple
 import queue
 
-from .ui_dialogs import ProgressDialog
+from modules.ui_dialogs import ProgressDialog
 
 def show_ai_prediction_dialog(app_instance: Any) -> None:
     """AI予測ダイアログを表示"""

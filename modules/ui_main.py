@@ -27,9 +27,9 @@ from modules.ai_predictor import predict_category_ai, suggest_similar_tags_ai, g
 from modules.customization import get_customized_category_keywords, apply_custom_rules
 
 # 分離されたモジュールからインポート
-from .ui_dialogs import ProgressDialog, ToolTip, show_help_dialog, show_about_dialog, show_license_info_dialog, show_shortcuts_dialog
-from .ui_export_import import export_personal_data, import_personal_data, export_tags, export_all_tags, backup_database
-from .ui_utils import (
+from modules.ui_dialogs import ProgressDialog, ToolTip, show_help_dialog, show_about_dialog, show_license_info_dialog, show_shortcuts_dialog
+from modules.ui_export_import import export_personal_data, import_personal_data, export_tags, export_all_tags, backup_database
+from modules.ui_utils import (
     build_category_list, build_category_descriptions, filter_tags_optimized,
     sort_prompt_by_priority, format_output_text, strip_weight_from_tag,
     is_float, extract_tags_from_prompt, make_theme_menu_command,
@@ -550,9 +550,6 @@ class TagManagerApp:
             selected = self.suggest_listbox.get(selection[0])
             # 現在のカーソル位置の単語を置換
             idx = self.output.index(tk.INSERT)
-            text = self.output.get("1.0", tk.END)
-            before = text[:self.output.index(tk.INSERT).split(".")[1]]
-            after = text[self.output.index(tk.INSERT).split(".")[1]:]
             # 直前のカンマや改行で区切る
             line, col = map(int, idx.split("."))
             line_text = self.output.get(f"{line}.0", f"{line}.end")
@@ -1862,7 +1859,7 @@ class TagManagerApp:
         
         # ローカルAIの読み込み状態をチェック
         try:
-            from .local_hf_manager import local_hf_manager
+            from modules.local_hf_manager import local_hf_manager
             if local_hf_manager.is_loading():
                 status_text = "🔄 ローカルAIモデル読み込み中... 最大2分程度お待ちください"
                 status_color = "warning"
@@ -2542,7 +2539,7 @@ class TagManagerApp:
         
         # ローカルAIの読み込み状態をチェック
         try:
-            from .local_hf_manager import local_hf_manager
+            from modules.local_hf_manager import local_hf_manager
             if local_hf_manager.is_loading():
                 status_text = "🔄 ローカルAIモデル読み込み中... 最大2分程度お待ちください"
                 status_color = "warning"
@@ -2984,7 +2981,8 @@ class TagManagerApp:
         プロンプト出力欄の日本語を一括翻訳する
         """
         try:
-            from modules.prompt_translator import prompt_translator
+            from modules.prompt_translator import PromptTranslator
+            prompt_translator = PromptTranslator()
             
             # 現在の出力欄内容を取得
             current_text = self.output.get("1.0", tk.END).strip()
@@ -3028,7 +3026,9 @@ class TagManagerApp:
             def translate_worker():
                 try:
                     # 翻訳実行
-                    translated_text, details = prompt_translator.translate_prompt(japanese_text)
+                    result = prompt_translator.translate_prompt_with_analysis(japanese_text)
+                    translated_text = result["translated"]
+                    details = f"翻訳方法: {result['translation_method']}, 信頼度: {result['confidence']:.2f}"
                     
                     # UIスレッドで結果を処理
                     self.root.after(0, lambda: process_translation_result(translated_text, details))

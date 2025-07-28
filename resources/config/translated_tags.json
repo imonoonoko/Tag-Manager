@@ -1,0 +1,1681 @@
+[
+  {
+    "tag": "1girl",
+    "jp": "1ガール",
+    "favorite": true,
+    "category": "人物・キャラクター"
+  },
+  {
+    "tag": "solo",
+    "jp": "ソロ",
+    "favorite": true,
+    "category": "人物・キャラクター"
+  },
+  {
+    "tag": "sitting pose",
+    "jp": "座っているポーズ",
+    "category": "ポーズ・アクション"
+  },
+  {
+    "tag": "cat ear beret",
+    "jp": "猫の耳のベレー帽",
+    "category": "服装・ファッション"
+  },
+  {
+    "tag": "long wavy pink hair",
+    "jp": "長い波状のピンクの髪",
+    "category": "髪型・ヘアスタイル"
+  },
+  {
+    "tag": "black bow",
+    "jp": "黒い弓",
+    "category": "服装・ファッション"
+  },
+  {
+    "tag": "plaid dress",
+    "jp": "格子縞のドレス",
+    "category": "服装・ファッション"
+  },
+  {
+    "tag": "oversized ribbon",
+    "jp": "特大のリボン",
+    "category": "服装・ファッション"
+  },
+  {
+    "tag": "heart-shaped leg warmers",
+    "jp": "ハート型のレッグウォーマー",
+    "category": "服装・ファッション"
+  },
+  {
+    "tag": "chunky platform shoes",
+    "jp": "分厚いプラットフォームシューズ",
+    "category": "服装・ファッション"
+  },
+  {
+    "tag": "girly street fashion",
+    "jp": "ガーリーストリートファッション",
+    "category": "服装・ファッション"
+  },
+  {
+    "tag": "cute expression",
+    "jp": "かわいい表現",
+    "category": "人物・キャラクター"
+  },
+  {
+    "tag": "pastel goth style",
+    "jp": "パステルゴススタイル",
+    "category": "色彩・照明"
+  },
+  {
+    "tag": "black lace accents",
+    "jp": "黒いレースのアクセント",
+    "category": "服装・ファッション"
+  },
+  {
+    "tag": "glowneon",
+    "jp": "グラウン",
+    "category": "色彩・照明"
+  },
+  {
+    "tag": "glowing",
+    "jp": "輝く",
+    "category": "色彩・照明"
+  },
+  {
+    "tag": "sparks",
+    "jp": "火花",
+    "category": "背景・環境"
+  },
+  {
+    "tag": "lightning",
+    "jp": "稲妻",
+    "category": "色彩・照明"
+  },
+  {
+    "tag": "blurry background",
+    "jp": "ぼやけた背景",
+    "category": "背景・環境"
+  },
+  {
+    "tag": "shiny skin",
+    "jp": "光沢のある肌",
+    "category": "人物・キャラクター"
+  },
+  {
+    "tag": "shiny",
+    "jp": "光沢",
+    "category": "人物・キャラクター"
+  },
+  {
+    "tag": "black and pink color scheme",
+    "jp": "黒とピンクの配色",
+    "favorite": false,
+    "category": "色彩・照明"
+  },
+  {
+    "tag": "A beautiful and mysterious anime girl with long black hair and piercing blue eyes",
+    "jp": "長い黒い髪と刺すような青い目をした美しく神秘的なアニメの女の子",
+    "favorite": false,
+    "category": "人物・キャラクター"
+  },
+  {
+    "tag": "wearing a black and white school uniform with a red scarf",
+    "jp": "赤いスカーフと黒と白の学校のユニフォームを着ている",
+    "favorite": false,
+    "category": "服装・ファッション"
+  },
+  {
+    "tag": "standing in a dark alleyway with a few scattered leaves and a faint moon in the background.",
+    "jp": "いくつかの散らばった葉と背景にかすかな月がある暗い路地に立っています。",
+    "favorite": false,
+    "category": "ポーズ・アクション"
+  },
+  {
+    "tag": "ribbon-trimmed vest",
+    "jp": "リボントリミングされたベスト",
+    "favorite": false,
+    "category": "服装・ファッション"
+  },
+  {
+    "tag": "uniform vest",
+    "jp": "均一なベスト",
+    "favorite": false,
+    "category": "服装・ファッション"
+  },
+  {
+    "tag": "multicolored clothes",
+    "jp": "多色の服",
+    "favorite": false,
+    "category": "服装・ファッション"
+  },
+  {
+    "tag": "impossible clothes",
+    "jp": "不可能な服",
+    "favorite": false,
+    "category": "服装・ファッション"
+  },
+  {
+    "tag": "asymmetrical clothes",
+    "jp": "非対称の服",
+    "favorite": false,
+    "category": "服装・ファッション"
+  },
+  {
+    "tag": "asymmetrical legwear",
+    "jp": "非対称のレッグウェア",
+    "favorite": false,
+    "category": "服装・ファッション"
+  },
+  {
+    "tag": "formal",
+    "jp": "フォーマル",
+    "favorite": false,
+    "category": "服装・ファッション"
+  },
+  {
+    "tag": "argyle sweater",
+    "jp": "アーガイルセーター",
+    "favorite": false,
+    "category": "服装・ファッション"
+  },
+  {
+    "tag": "polka dot shirt",
+    "jp": "水玉シャツ",
+    "favorite": false,
+    "category": "服装・ファッション"
+  },
+  {
+    "tag": "bead bracelet",
+    "jp": "ビーズブレスレット",
+    "favorite": false,
+    "category": "小物・アクセサリー"
+  },
+  {
+    "tag": "multiple earrings",
+    "jp": "複数のイヤリング",
+    "favorite": false,
+    "category": "小物・アクセサリー"
+  },
+  {
+    "tag": "fox mask",
+    "jp": "フォックスマスク",
+    "favorite": false,
+    "category": "小物・アクセサリー"
+  },
+  {
+    "tag": "zettai ryouiki",
+    "jp": "絶対領域",
+    "favorite": true,
+    "category": "服装・ファッション"
+  },
+  {
+    "tag": "thigh gap",
+    "jp": "太もものギャップ",
+    "favorite": true,
+    "category": "人物・キャラクター"
+  },
+  {
+    "tag": "crease",
+    "jp": "折り目",
+    "favorite": false,
+    "category": "服装・ファッション"
+  },
+  {
+    "tag": "looking away",
+    "jp": "目をそらしている",
+    "favorite": false,
+    "category": "ポーズ・アクション"
+  },
+  {
+    "tag": "depth of field",
+    "jp": "被写界深度",
+    "favorite": false,
+    "category": "特殊効果・フィルター"
+  },
+  {
+    "tag": "girl sliding down the slide",
+    "jp": "スライドを滑り落ちる女の子",
+    "favorite": false,
+    "category": "ポーズ・アクション"
+  },
+  {
+    "tag": "medium shot",
+    "jp": "ミディアムショット",
+    "favorite": false,
+    "category": "特殊効果・フィルター"
+  },
+  {
+    "tag": "Mountain",
+    "jp": "山",
+    "favorite": false,
+    "category": "背景・環境"
+  },
+  {
+    "tag": "CYBERPUNK",
+    "jp": "サイバーパンク",
+    "favorite": false,
+    "category": "アートスタイル・技法"
+  },
+  {
+    "tag": "NEON LIGHTS",
+    "jp": "ネオンライト",
+    "favorite": false,
+    "category": "色彩・照明"
+  },
+  {
+    "tag": "cartoon",
+    "jp": "漫画",
+    "favorite": false,
+    "category": "アートスタイル・技法"
+  },
+  {
+    "tag": "sketch",
+    "jp": "スケッチ",
+    "favorite": false,
+    "category": "アートスタイル・技法"
+  },
+  {
+    "tag": "trip style",
+    "jp": "旅行スタイル",
+    "favorite": false,
+    "category": "服装・ファッション"
+  },
+  {
+    "tag": "pink",
+    "jp": "ピンク",
+    "favorite": false,
+    "category": "色彩・照明"
+  },
+  {
+    "tag": "yellow",
+    "jp": "黄色",
+    "favorite": false,
+    "category": "色彩・照明"
+  },
+  {
+    "tag": "orange",
+    "jp": "オレンジ",
+    "favorite": false,
+    "category": "色彩・照明"
+  },
+  {
+    "tag": "black",
+    "jp": "黒",
+    "favorite": false,
+    "category": "色彩・照明"
+  },
+  {
+    "tag": "retro futuristic",
+    "jp": "レトロな未来",
+    "favorite": false,
+    "category": "アートスタイル・技法"
+  },
+  {
+    "tag": "neonlight grid lines",
+    "jp": "Neonlightグリッドライン",
+    "favorite": false,
+    "category": "色彩・照明"
+  },
+  {
+    "tag": "sunset",
+    "jp": "日没",
+    "favorite": false,
+    "category": "背景・環境"
+  },
+  {
+    "tag": "palm tree",
+    "jp": "ヤシの木",
+    "favorite": false,
+    "category": "背景・環境"
+  },
+  {
+    "tag": "retrowave",
+    "jp": "レトロウェーブ",
+    "favorite": false,
+    "category": "アートスタイル・技法"
+  },
+  {
+    "tag": "90s style",
+    "jp": "90年代スタイル",
+    "favorite": false,
+    "category": "アートスタイル・技法"
+  },
+  {
+    "tag": "portrait",
+    "jp": "肖像画",
+    "favorite": false,
+    "category": "アートスタイル・技法"
+  },
+  {
+    "tag": "drawing",
+    "jp": "描画",
+    "favorite": false,
+    "category": "アートスタイル・技法"
+  },
+  {
+    "tag": "shading",
+    "jp": "シェーディング",
+    "favorite": false,
+    "category": "アートスタイル・技法"
+  },
+  {
+    "tag": "Norman Rockwell style",
+    "jp": "ノーマンロックウェルスタイル",
+    "favorite": false,
+    "category": "アートスタイル・技法"
+  },
+  {
+    "tag": "from above",
+    "jp": "上から",
+    "favorite": false,
+    "category": "特殊効果・フィルター"
+  },
+  {
+    "tag": "lofi artstyle",
+    "jp": "Lofi Artstyle",
+    "favorite": false,
+    "category": "アートスタイル・技法"
+  },
+  {
+    "tag": "retro aesthetic",
+    "jp": "レトロ美学",
+    "favorite": false,
+    "category": "アートスタイル・技法"
+  },
+  {
+    "tag": "Cool pose",
+    "jp": "クールなポーズ",
+    "favorite": false,
+    "category": "ポーズ・アクション"
+  },
+  {
+    "tag": "Guilty Gear style",
+    "jp": "有罪のギアスタイル",
+    "favorite": false,
+    "category": "アートスタイル・技法"
+  },
+  {
+    "tag": "vivid neon colors",
+    "jp": "鮮やかなネオンの色",
+    "favorite": false,
+    "category": "色彩・照明"
+  },
+  {
+    "tag": "masterpiece",
+    "jp": "傑作",
+    "favorite": false,
+    "category": "アートスタイル・技法"
+  },
+  {
+    "tag": "1boy",
+    "jp": "1ボーイ",
+    "favorite": false,
+    "category": "人物・キャラクター"
+  },
+  {
+    "tag": "full body",
+    "jp": "全身",
+    "favorite": false,
+    "category": "特殊効果・フィルター"
+  },
+  {
+    "tag": "close-up",
+    "jp": "閉じる",
+    "favorite": false,
+    "category": "特殊効果・フィルター"
+  },
+  {
+    "tag": "looking at viewer",
+    "jp": "視聴者を見ています",
+    "favorite": false,
+    "category": "ポーズ・アクション"
+  },
+  {
+    "tag": "smiling",
+    "jp": "笑顔",
+    "favorite": false,
+    "category": "表情・感情"
+  },
+  {
+    "tag": "dynamic pose",
+    "jp": "動的なポーズ",
+    "favorite": false,
+    "category": "ポーズ・アクション"
+  },
+  {
+    "tag": "long hair",
+    "jp": "長い髪",
+    "favorite": false,
+    "category": "髪型・ヘアスタイル"
+  },
+  {
+    "tag": "short hair",
+    "jp": "短い髪",
+    "favorite": false,
+    "category": "髪型・ヘアスタイル"
+  },
+  {
+    "tag": "wavy hair",
+    "jp": "波状の髪",
+    "favorite": false,
+    "category": "髪型・ヘアスタイル"
+  },
+  {
+    "tag": "bangs",
+    "jp": "前髪",
+    "favorite": false,
+    "category": "髪型・ヘアスタイル"
+  },
+  {
+    "tag": "blue eyes",
+    "jp": "青い目",
+    "favorite": false,
+    "category": "表情・感情"
+  },
+  {
+    "tag": "glowing eyes",
+    "jp": "輝く目",
+    "favorite": false,
+    "category": "表情・感情"
+  },
+  {
+    "tag": "freckles",
+    "jp": "そばかす",
+    "favorite": false,
+    "category": "人物・キャラクター"
+  },
+  {
+    "tag": "blush",
+    "jp": "赤面",
+    "favorite": false,
+    "category": "表情・感情"
+  },
+  {
+    "tag": "school uniform",
+    "jp": "学校の制服",
+    "favorite": false,
+    "category": "服装・ファッション"
+  },
+  {
+    "tag": "casual clothes",
+    "jp": "カジュアルな服",
+    "favorite": false,
+    "category": "服装・ファッション"
+  },
+  {
+    "tag": "fantasy armor",
+    "jp": "ファンタジーアーマー",
+    "favorite": false,
+    "category": "服装・ファッション"
+  },
+  {
+    "tag": "elegant dress",
+    "jp": "エレガントなドレス",
+    "favorite": false,
+    "category": "服装・ファッション"
+  },
+  {
+    "tag": "gothic lolita",
+    "jp": "ゴシックロリータ",
+    "favorite": false,
+    "category": "服装・ファッション"
+  },
+  {
+    "tag": "streetwear",
+    "jp": "ストリートウェア",
+    "favorite": false,
+    "category": "服装・ファッション"
+  },
+  {
+    "tag": "kimono",
+    "jp": "着物",
+    "favorite": false,
+    "category": "服装・ファッション"
+  },
+  {
+    "tag": "cityscape",
+    "jp": "街並み",
+    "favorite": false,
+    "category": "背景・環境"
+  },
+  {
+    "tag": "forest",
+    "jp": "森",
+    "favorite": false,
+    "category": "背景・環境"
+  },
+  {
+    "tag": "night sky",
+    "jp": "夜空",
+    "favorite": false,
+    "category": "背景・環境"
+  },
+  {
+    "tag": "futuristic city",
+    "jp": "未来の都市",
+    "favorite": false,
+    "category": "背景・環境"
+  },
+  {
+    "tag": "fantasy landscape",
+    "jp": "ファンタジーの風景",
+    "favorite": false,
+    "category": "背景・環境"
+  },
+  {
+    "tag": "bokeh background",
+    "jp": "ボケの背景",
+    "favorite": false,
+    "category": "背景・環境"
+  },
+  {
+    "tag": "foggy forest",
+    "jp": "霧の森",
+    "favorite": false,
+    "category": "背景・環境"
+  },
+  {
+    "tag": "vibrant colors",
+    "jp": "鮮やかな色",
+    "favorite": false,
+    "category": "色彩・照明"
+  },
+  {
+    "tag": "pastel colors",
+    "jp": "パステルカラー",
+    "favorite": false,
+    "category": "色彩・照明"
+  },
+  {
+    "tag": "neon lights",
+    "jp": "ネオンライト",
+    "favorite": false,
+    "category": "色彩・照明"
+  },
+  {
+    "tag": "soft lighting",
+    "jp": "ソフト照明",
+    "favorite": false,
+    "category": "色彩・照明"
+  },
+  {
+    "tag": "dramatic lighting",
+    "jp": "劇的な照明",
+    "favorite": false,
+    "category": "色彩・照明"
+  },
+  {
+    "tag": "backlight",
+    "jp": "バックライト",
+    "favorite": false,
+    "category": "色彩・照明"
+  },
+  {
+    "tag": "high contrast",
+    "jp": "高いコントラスト",
+    "favorite": false,
+    "category": "色彩・照明"
+  },
+  {
+    "tag": "digital art",
+    "jp": "デジタルアート",
+    "favorite": false,
+    "category": "アートスタイル・技法"
+  },
+  {
+    "tag": "watercolor",
+    "jp": "水彩",
+    "favorite": false,
+    "category": "アートスタイル・技法"
+  },
+  {
+    "tag": "anime style",
+    "jp": "アニメスタイル",
+    "favorite": false,
+    "category": "アートスタイル・技法"
+  },
+  {
+    "tag": "photorealistic",
+    "jp": "フォトリアリック",
+    "favorite": false,
+    "category": "アートスタイル・技法"
+  },
+  {
+    "tag": "3d render",
+    "jp": "3Dレンダリング",
+    "favorite": false,
+    "category": "アートスタイル・技法"
+  },
+  {
+    "tag": "oil painting",
+    "jp": "油絵",
+    "favorite": false,
+    "category": "アートスタイル・技法"
+  },
+  {
+    "tag": "cel-shading",
+    "jp": "セルシェード",
+    "favorite": false,
+    "category": "アートスタイル・技法"
+  },
+  {
+    "tag": "sparkles",
+    "jp": "輝き",
+    "favorite": false,
+    "category": "特殊効果・フィルター"
+  },
+  {
+    "tag": "lens flare",
+    "jp": "レンズフレア",
+    "favorite": true,
+    "category": "特殊効果・フィルター"
+  },
+  {
+    "tag": "motion blur",
+    "jp": "モーションブラー",
+    "favorite": true,
+    "category": "背景・環境"
+  },
+  {
+    "tag": "grain",
+    "jp": "粒",
+    "favorite": false,
+    "category": "背景・環境"
+  },
+  {
+    "tag": "vignette",
+    "jp": "ビネット",
+    "favorite": false,
+    "category": "特殊効果・フィルター"
+  },
+  {
+    "tag": "glitch effect",
+    "jp": "グリッチ効果",
+    "favorite": false,
+    "category": "特殊効果・フィルター"
+  },
+  {
+    "tag": "fog",
+    "jp": "霧",
+    "favorite": false,
+    "category": "特殊効果・フィルター"
+  },
+  {
+    "tag": "animal ears",
+    "jp": "動物の耳",
+    "favorite": false,
+    "category": "髪型・ヘアスタイル"
+  },
+  {
+    "tag": "wolf girl",
+    "jp": "オオカミの女の子",
+    "favorite": false,
+    "category": "人物・キャラクター"
+  },
+  {
+    "tag": "wolf ears",
+    "jp": "オオカミの耳",
+    "favorite": false,
+    "category": "髪型・ヘアスタイル"
+  },
+  {
+    "tag": "wolf tail",
+    "jp": "オオカミの尾",
+    "favorite": false,
+    "category": "髪型・ヘアスタイル"
+  },
+  {
+    "tag": "light blue hair",
+    "jp": "水色の髪",
+    "favorite": false,
+    "category": "髪型・ヘアスタイル"
+  },
+  {
+    "tag": "messy hair",
+    "jp": "乱雑な髪",
+    "favorite": false,
+    "category": "髪型・ヘアスタイル"
+  },
+  {
+    "tag": "seductive smile",
+    "jp": "魅惑的な笑顔",
+    "favorite": false,
+    "category": "表情・感情"
+  },
+  {
+    "tag": "medium breast",
+    "jp": "中程度の胸",
+    "favorite": false,
+    "category": "人物・キャラクター"
+  },
+  {
+    "tag": "blue kimono",
+    "jp": "ブルー着物",
+    "favorite": false,
+    "category": "服装・ファッション"
+  },
+  {
+    "tag": "off-shoulder kimono",
+    "jp": "肩の着物",
+    "favorite": false,
+    "category": "服装・ファッション"
+  },
+  {
+    "tag": "short kimono",
+    "jp": "短い着物",
+    "favorite": false,
+    "category": "服装・ファッション"
+  },
+  {
+    "tag": "white thighhighs",
+    "jp": "白い太もも",
+    "favorite": false,
+    "category": "人物・キャラクター"
+  },
+  {
+    "tag": "sitting",
+    "jp": "座っている",
+    "favorite": false,
+    "category": "ポーズ・アクション"
+  },
+  {
+    "tag": "full moon",
+    "jp": "満月",
+    "favorite": false,
+    "category": "背景・環境"
+  },
+  {
+    "tag": "fantasy",
+    "jp": "ファンタジー",
+    "favorite": false,
+    "category": "アートスタイル・技法"
+  },
+  {
+    "tag": "sharp focus",
+    "jp": "シャープな焦点",
+    "favorite": false,
+    "category": "アートスタイル・技法"
+  },
+  {
+    "tag": "perfect face",
+    "jp": "完璧な顔",
+    "favorite": false,
+    "category": "表情・感情"
+  },
+  {
+    "tag": "perfect eyes",
+    "jp": "完璧な目",
+    "favorite": false,
+    "category": "表情・感情"
+  },
+  {
+    "tag": "skin indentations",
+    "jp": "皮膚のくぼみ",
+    "favorite": false,
+    "category": "人物・キャラクター"
+  },
+  {
+    "tag": "anime coloring",
+    "jp": "アニメ色",
+    "favorite": false,
+    "category": "色彩・照明"
+  },
+  {
+    "tag": "detailed background",
+    "jp": "詳細な背景",
+    "favorite": true,
+    "category": "背景・環境"
+  },
+  {
+    "tag": "beautiful detailed eyes",
+    "jp": "美しい詳細な目",
+    "favorite": false,
+    "category": "表情・感情"
+  },
+  {
+    "tag": "detailed eyes",
+    "jp": "詳細な目",
+    "favorite": false,
+    "category": "表情・感情"
+  },
+  {
+    "tag": "smile",
+    "jp": "笑顔",
+    "favorite": false,
+    "category": "表情・感情"
+  },
+  {
+    "tag": "jacket",
+    "jp": "ジャケット",
+    "favorite": false,
+    "category": "服装・ファッション"
+  },
+  {
+    "tag": "braid",
+    "jp": "三つ編み",
+    "favorite": false,
+    "category": "髪型・ヘアスタイル"
+  },
+  {
+    "tag": "twin braids",
+    "jp": "ツインブレード",
+    "favorite": false,
+    "category": "髪型・ヘアスタイル"
+  },
+  {
+    "tag": "black footwear",
+    "jp": "黒い靴",
+    "favorite": false,
+    "category": "服装・ファッション"
+  },
+  {
+    "tag": "cat ears",
+    "jp": "猫の耳",
+    "favorite": false,
+    "category": "髪型・ヘアスタイル"
+  },
+  {
+    "tag": "shorts",
+    "jp": "ショーツ",
+    "favorite": false,
+    "category": "服装・ファッション"
+  },
+  {
+    "tag": "denim",
+    "jp": "デニム",
+    "favorite": false,
+    "category": "服装・ファッション"
+  },
+  {
+    "tag": "thighhighs",
+    "jp": "大腿部",
+    "favorite": false,
+    "category": "人物・キャラクター"
+  },
+  {
+    "tag": "shoes",
+    "jp": "靴",
+    "favorite": false,
+    "category": "服装・ファッション"
+  },
+  {
+    "tag": "black jacket",
+    "jp": "黒いジャケット",
+    "favorite": false,
+    "category": "服装・ファッション"
+  },
+  {
+    "tag": "cat girl",
+    "jp": "猫の女の子",
+    "favorite": false,
+    "category": "人物・キャラクター"
+  },
+  {
+    "tag": "denim shorts",
+    "jp": "デニムショーツ",
+    "favorite": false,
+    "category": "服装・ファッション"
+  },
+  {
+    "tag": "outdoors",
+    "jp": "屋外",
+    "favorite": false,
+    "category": "背景・環境"
+  },
+  {
+    "tag": "holding camera",
+    "jp": "カメラを持っています",
+    "favorite": false,
+    "category": "ポーズ・アクション"
+  },
+  {
+    "tag": "open clothes",
+    "jp": "服を開けます",
+    "favorite": false,
+    "category": "服装・ファッション"
+  },
+  {
+    "tag": "black hair",
+    "jp": "黒髪",
+    "favorite": false,
+    "category": "髪型・ヘアスタイル"
+  },
+  {
+    "tag": "tail",
+    "jp": "しっぽ",
+    "favorite": false,
+    "category": "服装・ファッション"
+  },
+  {
+    "tag": "grin",
+    "jp": "にやにや笑い",
+    "favorite": false,
+    "category": "表情・感情"
+  },
+  {
+    "tag": "round eyewear",
+    "jp": "丸いアイウェア",
+    "favorite": false,
+    "category": "服装・ファッション"
+  },
+  {
+    "tag": "cat tail",
+    "jp": "猫の尾",
+    "favorite": false,
+    "category": "服装・ファッション"
+  },
+  {
+    "tag": "tinted eyewear",
+    "jp": "着色アイウェア",
+    "favorite": false,
+    "category": "服装・ファッション"
+  },
+  {
+    "tag": "crop top",
+    "jp": "クロップトップ",
+    "favorite": false,
+    "category": "服装・ファッション"
+  },
+  {
+    "tag": "camera",
+    "jp": "カメラ",
+    "favorite": false,
+    "category": "小物・アクセサリー"
+  },
+  {
+    "tag": "open jacket",
+    "jp": "オープンジャケット",
+    "favorite": false,
+    "category": "服装・ファッション"
+  },
+  {
+    "tag": "socks",
+    "jp": "ソックス",
+    "favorite": false,
+    "category": "服装・ファッション"
+  },
+  {
+    "tag": "bare shoulders",
+    "jp": "裸の肩",
+    "favorite": false,
+    "category": "服装・ファッション"
+  },
+  {
+    "tag": "blue hair",
+    "jp": "青い髪",
+    "favorite": false,
+    "category": "髪型・ヘアスタイル"
+  },
+  {
+    "tag": "long sleeves",
+    "jp": "長袖",
+    "favorite": false,
+    "category": "服装・ファッション"
+  },
+  {
+    "tag": "multicolored hair",
+    "jp": "多色の髪",
+    "favorite": false,
+    "category": "髪型・ヘアスタイル"
+  },
+  {
+    "tag": "sunglasses",
+    "jp": "サングラス",
+    "favorite": false,
+    "category": "小物・アクセサリー"
+  },
+  {
+    "tag": "short shorts",
+    "jp": "ショートショートパンツ",
+    "favorite": false,
+    "category": "服装・ファッション"
+  },
+  {
+    "tag": "thigh strap",
+    "jp": "太ももストラップ",
+    "favorite": false,
+    "category": "服装・ファッション"
+  },
+  {
+    "tag": "graffiti",
+    "jp": "落書き",
+    "favorite": false,
+    "category": "特殊効果・フィルター"
+  },
+  {
+    "tag": "choker",
+    "jp": "チョーカー",
+    "favorite": false,
+    "category": "服装・ファッション"
+  },
+  {
+    "tag": "breasts",
+    "jp": "胸",
+    "favorite": false,
+    "category": "人物・キャラクター"
+  },
+  {
+    "tag": "looking over eyewear",
+    "jp": "アイウェアを見ています",
+    "favorite": false,
+    "category": "ポーズ・アクション"
+  },
+  {
+    "tag": "earrings",
+    "jp": "イヤリング",
+    "favorite": false,
+    "category": "小物・アクセサリー"
+  },
+  {
+    "tag": "sneakers",
+    "jp": "スニーカー",
+    "favorite": false,
+    "category": "服装・ファッション"
+  },
+  {
+    "tag": "jewelry",
+    "jp": "ジュエリー",
+    "favorite": false,
+    "category": "小物・アクセサリー"
+  },
+  {
+    "tag": "pink hair",
+    "jp": "ピンクの髪",
+    "favorite": false,
+    "category": "髪型・ヘアスタイル"
+  },
+  {
+    "tag": "platform footwear",
+    "jp": "プラットフォームの履物",
+    "favorite": false,
+    "category": "服装・ファッション"
+  },
+  {
+    "tag": "pink eyes",
+    "jp": "ピンクの目",
+    "favorite": false,
+    "category": "表情・感情"
+  },
+  {
+    "tag": "heart",
+    "jp": "心臓",
+    "favorite": false,
+    "category": "人物・キャラクター"
+  },
+  {
+    "tag": "hat",
+    "jp": "帽子",
+    "favorite": false,
+    "category": "服装・ファッション"
+  },
+  {
+    "tag": "black headwear",
+    "jp": "黒い帽子",
+    "favorite": false,
+    "category": "服装・ファッション"
+  },
+  {
+    "tag": "bow",
+    "jp": "弓",
+    "favorite": false,
+    "category": "服装・ファッション"
+  },
+  {
+    "tag": "dress",
+    "jp": "ドレス",
+    "favorite": false,
+    "category": "服装・ファッション"
+  },
+  {
+    "tag": "crossed arms",
+    "jp": "交差した腕",
+    "favorite": false,
+    "category": "ポーズ・アクション"
+  },
+  {
+    "tag": "closed mouth",
+    "jp": "閉じた口",
+    "favorite": false,
+    "category": "表情・感情"
+  },
+  {
+    "tag": "leg warmers",
+    "jp": "レッグウォーマー",
+    "favorite": false,
+    "category": "色彩・照明"
+  },
+  {
+    "tag": "very long hair",
+    "jp": "とても長い髪",
+    "favorite": false,
+    "category": "髪型・ヘアスタイル"
+  },
+  {
+    "tag": "knees up",
+    "jp": "膝を上げます",
+    "favorite": false,
+    "category": "ポーズ・アクション"
+  },
+  {
+    "tag": "frills",
+    "jp": "フリル",
+    "favorite": false,
+    "category": "服装・ファッション"
+  },
+  {
+    "tag": "hat bow",
+    "jp": "帽子の弓",
+    "favorite": false,
+    "category": "服装・ファッション"
+  },
+  {
+    "tag": "skirt",
+    "jp": "スカート",
+    "favorite": true,
+    "category": "服装・ファッション"
+  },
+  {
+    "tag": "putting on sunglass on the head",
+    "jp": "頭にサングラスをかける",
+    "favorite": false,
+    "category": "小物・アクセサリー"
+  },
+  {
+    "tag": "raising sunglass above eyes",
+    "jp": "目の上にサングラスを上げる",
+    "favorite": false,
+    "category": "ポーズ・アクション"
+  },
+  {
+    "tag": "look askance",
+    "jp": "質問を見てください",
+    "favorite": false,
+    "category": "ポーズ・アクション"
+  },
+  {
+    "tag": "turn away",
+    "jp": "背を向けてください",
+    "favorite": false,
+    "category": "ポーズ・アクション"
+  },
+  {
+    "tag": "avoid eye contact",
+    "jp": "アイコンタクトは避けてください",
+    "favorite": false,
+    "category": "表情・感情"
+  },
+  {
+    "tag": "not make eye contact",
+    "jp": "アイコンタクトをしないでください",
+    "favorite": false,
+    "category": "ポーズ・アクション"
+  },
+  {
+    "tag": "light smile",
+    "jp": "軽い笑顔",
+    "favorite": false,
+    "category": "表情・感情"
+  },
+  {
+    "tag": "ponytail",
+    "jp": "ポニーテール",
+    "favorite": false,
+    "category": "髪型・ヘアスタイル"
+  },
+  {
+    "tag": "sea",
+    "jp": "海",
+    "favorite": false,
+    "category": "背景・環境"
+  },
+  {
+    "tag": "bikini",
+    "jp": "ビキニ",
+    "favorite": false,
+    "category": "服装・ファッション"
+  },
+  {
+    "tag": "show eyes",
+    "jp": "目を見せます",
+    "favorite": false,
+    "category": "人物・キャラクター"
+  },
+  {
+    "tag": "summer vacation",
+    "jp": "夏休み",
+    "favorite": false,
+    "category": "背景・環境"
+  },
+  {
+    "tag": "bright sunlight",
+    "jp": "明るい日光",
+    "favorite": false,
+    "category": "色彩・照明"
+  },
+  {
+    "tag": "blue sky",
+    "jp": "青空",
+    "favorite": false,
+    "category": "背景・環境"
+  },
+  {
+    "tag": "best quality",
+    "jp": "最高品質",
+    "favorite": false,
+    "category": "アートスタイル・技法"
+  },
+  {
+    "tag": "hatsune miku",
+    "jp": "初音ミク",
+    "favorite": false,
+    "category": "人物・キャラクター"
+  },
+  {
+    "tag": "bondage",
+    "jp": "ボンデージ",
+    "favorite": true,
+    "category": "服装・ファッション"
+  },
+  {
+    "tag": "rating:general",
+    "jp": "評価：一般",
+    "favorite": false,
+    "category": "アートスタイル・技法"
+  },
+  {
+    "tag": "casual",
+    "jp": "カジュアル",
+    "favorite": false,
+    "category": "アートスタイル・技法"
+  },
+  {
+    "tag": "black Hoodie",
+    "jp": "黒いパーカー",
+    "favorite": false,
+    "category": "服装・ファッション"
+  },
+  {
+    "tag": "cute",
+    "jp": "かわいい",
+    "favorite": false,
+    "category": "人物・キャラクター"
+  },
+  {
+    "tag": "oekaki",
+    "jp": "oekaki",
+    "favorite": false,
+    "category": "アートスタイル・技法"
+  },
+  {
+    "tag": "upper body",
+    "jp": "上半身",
+    "favorite": false,
+    "category": "人物・キャラクター"
+  },
+  {
+    "tag": "holding hoodie",
+    "jp": "パーカーを持っています",
+    "favorite": false,
+    "category": "服装・ファッション"
+  },
+  {
+    "tag": "very aesthetic",
+    "jp": "非常に美的",
+    "favorite": false,
+    "category": "アートスタイル・技法"
+  },
+  {
+    "tag": "no text",
+    "jp": "テキストはありません",
+    "favorite": false,
+    "category": "特殊効果・フィルター"
+  },
+  {
+    "tag": "girl",
+    "jp": "女の子",
+    "favorite": false,
+    "category": "人物・キャラクター"
+  },
+  {
+    "tag": "longhair",
+    "jp": "ロングヘア",
+    "favorite": false,
+    "category": "髪型・ヘアスタイル"
+  },
+  {
+    "tag": "mini skirt",
+    "jp": "ミニスカート",
+    "favorite": true,
+    "category": "服装・ファッション"
+  },
+  {
+    "tag": "garter belt",
+    "jp": "ガーターベルト",
+    "favorite": true,
+    "category": "小物・アクセサリー"
+  },
+  {
+    "tag": "pinkeyes",
+    "jp": "ピンアイズ",
+    "favorite": false,
+    "category": "人物・キャラクター"
+  },
+  {
+    "tag": "maid",
+    "jp": "メイド",
+    "favorite": false,
+    "category": "人物・キャラクター"
+  },
+  {
+    "tag": "colorful",
+    "jp": "カラフル",
+    "favorite": false,
+    "category": "色彩・照明"
+  },
+  {
+    "tag": "magic",
+    "jp": "魔法",
+    "favorite": false,
+    "category": "特殊効果・フィルター"
+  },
+  {
+    "tag": "cafe",
+    "jp": "カフェ",
+    "favorite": false,
+    "category": "背景・環境"
+  },
+  {
+    "tag": "bigbust",
+    "jp": "ビッグバスト",
+    "favorite": false,
+    "category": "人物・キャラクター"
+  },
+  {
+    "tag": "pantiesshot",
+    "jp": "パンティーショット",
+    "favorite": false,
+    "category": "アートスタイル・技法"
+  },
+  {
+    "tag": "glasses",
+    "jp": "眼鏡",
+    "favorite": false,
+    "category": "小物・アクセサリー"
+  },
+  {
+    "tag": "ass",
+    "jp": "お尻",
+    "favorite": true,
+    "category": "人物・キャラクター"
+  },
+  {
+    "tag": "hair ornament",
+    "jp": "髪の飾り",
+    "favorite": false,
+    "category": "小物・アクセサリー"
+  },
+  {
+    "tag": "flower",
+    "jp": "花",
+    "favorite": false,
+    "category": "小物・アクセサリー"
+  },
+  {
+    "tag": "hair flower",
+    "jp": "髪の花",
+    "favorite": false,
+    "category": "小物・アクセサリー"
+  },
+  {
+    "tag": "blonde hair",
+    "jp": "ブロンドの髪",
+    "favorite": false,
+    "category": "髪型・ヘアスタイル"
+  },
+  {
+    "tag": "yellow eyes",
+    "jp": "黄色い目",
+    "favorite": false,
+    "category": "人物・キャラクター"
+  },
+  {
+    "tag": "blue shorts",
+    "jp": "青いショートパンツ",
+    "favorite": false,
+    "category": "服装・ファッション"
+  },
+  {
+    "tag": "sweat",
+    "jp": "汗",
+    "favorite": false,
+    "category": "人物・キャラクター"
+  },
+  {
+    "tag": "twisted torso",
+    "jp": "ねじれた胴体",
+    "favorite": false,
+    "category": "ポーズ・アクション"
+  },
+  {
+    "tag": "thighs",
+    "jp": "太もも",
+    "favorite": false,
+    "category": "人物・キャラクター"
+  },
+  {
+    "tag": "covered nipples",
+    "jp": "覆われた乳首",
+    "favorite": false,
+    "category": "人物・キャラクター"
+  },
+  {
+    "tag": "looking back",
+    "jp": "振り返る",
+    "favorite": false,
+    "category": "ポーズ・アクション"
+  },
+  {
+    "tag": "sports bra",
+    "jp": "スポーツブラ",
+    "favorite": false,
+    "category": "服装・ファッション"
+  },
+  {
+    "tag": "hand on hip",
+    "jp": "腰の手",
+    "favorite": false,
+    "category": "ポーズ・アクション"
+  },
+  {
+    "tag": "indoors",
+    "jp": "屋内",
+    "favorite": false,
+    "category": "背景・環境"
+  },
+  {
+    "tag": "from behind",
+    "jp": "後ろから",
+    "favorite": false,
+    "category": "アートスタイル・技法"
+  },
+  {
+    "tag": "white flower",
+    "jp": "白い花",
+    "favorite": false,
+    "category": "小物・アクセサリー"
+  },
+  {
+    "tag": "focus_face",
+    "jp": "フォーカスフェイス",
+    "favorite": false,
+    "category": "アートスタイル・技法"
+  },
+  {
+    "tag": "ultra-detailed",
+    "jp": "超控除",
+    "favorite": false,
+    "category": ""
+  },
+  {
+    "tag": "high resolution",
+    "jp": "高解像度",
+    "favorite": false,
+    "category": ""
+  },
+  {
+    "tag": "4k",
+    "jp": "4k",
+    "favorite": false,
+    "category": ""
+  },
+  {
+    "tag": "anime",
+    "jp": "アニメ",
+    "favorite": false,
+    "category": ""
+  },
+  {
+    "tag": "gradation color gothic lolita",
+    "jp": "グラデーションカラーゴシックロリータ",
+    "favorite": false,
+    "category": ""
+  },
+  {
+    "tag": "Prussian blue hair",
+    "jp": "プロイセンブルーヘア",
+    "favorite": false,
+    "category": ""
+  },
+  {
+    "tag": "inner color hair",
+    "jp": "インナーカラーヘア",
+    "favorite": false,
+    "category": ""
+  },
+  {
+    "tag": "twintail",
+    "jp": "ツインテール",
+    "favorite": false,
+    "category": ""
+  },
+  {
+    "tag": "hime cut",
+    "jp": "姫カット",
+    "favorite": false,
+    "category": ""
+  },
+  {
+    "tag": "odd eye",
+    "jp": "奇妙な目",
+    "favorite": false,
+    "category": ""
+  },
+  {
+    "tag": "elf",
+    "jp": "エルフ",
+    "favorite": false,
+    "category": ""
+  },
+  {
+    "tag": "sleeveless top",
+    "jp": "ノースリーブトップ",
+    "favorite": false,
+    "category": ""
+  },
+  {
+    "tag": "white stockings",
+    "jp": "白いストッキング",
+    "favorite": false,
+    "category": "服装・ファッション"
+  },
+  {
+    "tag": "knee high boots",
+    "jp": "膝の高いブーツ",
+    "favorite": false,
+    "category": "服装・ファッション"
+  },
+  {
+    "tag": "white color boots",
+    "jp": "白いカラーブーツ",
+    "favorite": false,
+    "category": "服装・ファッション"
+  },
+  {
+    "tag": "makeup",
+    "jp": "補う",
+    "favorite": false,
+    "category": ""
+  },
+  {
+    "tag": "ribbon",
+    "jp": "リボン",
+    "favorite": false,
+    "category": "服装・ファッション"
+  },
+  {
+    "tag": "rays of light",
+    "jp": "光の光",
+    "favorite": false,
+    "category": ""
+  },
+  {
+    "tag": "camping background",
+    "jp": "キャンプの背景",
+    "favorite": false,
+    "category": "背景・環境"
+  },
+  {
+    "tag": "swimsuit",
+    "jp": "水着",
+    "favorite": false,
+    "category": ""
+  },
+  {
+    "tag": "pool",
+    "jp": "プール",
+    "favorite": false,
+    "category": ""
+  },
+  {
+    "tag": "competition swimsuit",
+    "jp": "競争水着",
+    "favorite": true,
+    "category": ""
+  },
+  {
+    "tag": "wet",
+    "jp": "濡れた",
+    "favorite": true,
+    "category": ""
+  },
+  {
+    "tag": "hairclip",
+    "jp": "ヘアリップ",
+    "favorite": false,
+    "category": ""
+  },
+  {
+    "tag": "poolside",
+    "jp": "プールサイド",
+    "favorite": false,
+    "category": "背景・環境"
+  },
+  {
+    "tag": "water",
+    "jp": "水",
+    "favorite": true,
+    "category": ""
+  },
+  {
+    "tag": "back",
+    "jp": "戻る",
+    "favorite": false,
+    "category": ""
+  },
+  {
+    "tag": "blunt bangs",
+    "jp": "鈍い前髪",
+    "favorite": false,
+    "category": "髪型・ヘアスタイル"
+  }
+]

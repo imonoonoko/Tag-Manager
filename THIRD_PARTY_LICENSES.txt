@@ -1,0 +1,155 @@
+# 第三者ライセンス情報 (Third-Party Licenses)
+
+このファイルには、本プロジェクトで使用している第三者ライブラリとモデルのライセンス情報が記載されています。
+
+## Python ライブラリ
+
+### ttkbootstrap >= 1.10.1
+- **ライセンス**: MIT License
+- **URL**: https://github.com/israel-dryer/ttkbootstrap
+- **商用利用**: 可能
+- **制限**: なし
+
+### psutil >= 5.9.0
+- **ライセンス**: BSD-3-Clause
+- **URL**: https://github.com/giampaolo/psutil
+- **商用利用**: 可能
+- **制限**: なし
+
+### deep-translator >= 1.11.4
+- **ライセンス**: MIT License
+- **URL**: https://github.com/nidhaloff/deep-translator
+- **商用利用**: 可能
+- **制限**: なし
+
+### pytest >= 7.0.0
+- **ライセンス**: MIT License
+- **URL**: https://github.com/pytest-dev/pytest
+- **商用利用**: 可能
+- **制限**: なし
+
+### mypy >= 1.0.0
+- **ライセンス**: MIT License
+- **URL**: https://github.com/python/mypy
+- **商用利用**: 可能
+- **制限**: なし
+
+### requests >= 2.31.0
+- **ライセンス**: Apache-2.0
+- **URL**: https://github.com/psf/requests
+- **商用利用**: 可能
+- **制限**: なし
+
+### numpy >= 1.24.0
+- **ライセンス**: BSD-3-Clause
+- **URL**: https://github.com/numpy/numpy
+- **商用利用**: 可能
+- **制限**: なし
+
+### transformers >= 4.30.0
+- **ライセンス**: Apache-2.0
+- **URL**: https://github.com/huggingface/transformers
+- **商用利用**: 可能
+- **制限**: モデル固有のライセンス確認が必要
+
+### sentence-transformers >= 2.2.0
+- **ライセンス**: Apache-2.0
+- **URL**: https://github.com/UKPLab/sentence-transformers
+- **商用利用**: 可能
+- **制限**: モデル固有のライセンス確認が必要
+
+### torch >= 2.0.0
+- **ライセンス**: BSD-3-Clause
+- **URL**: https://github.com/pytorch/pytorch
+- **商用利用**: 可能
+- **制限**: なし
+
+### scikit-learn >= 1.3.0
+- **ライセンス**: BSD-3-Clause
+- **URL**: https://github.com/scikit-learn/scikit-learn
+- **商用利用**: 可能
+- **制限**: なし
+
+### pandas >= 2.0.0
+- **ライセンス**: BSD-3-Clause
+- **URL**: https://github.com/pandas-dev/pandas
+- **商用利用**: 可能
+- **制限**: なし
+
+### joblib >= 1.3.0
+- **ライセンス**: BSD-3-Clause
+- **URL**: https://github.com/joblib/joblib
+- **商用利用**: 可能
+- **制限**: なし
+
+## Hugging Face モデル
+
+### sentence-transformers/all-MiniLM-L6-v2
+- **ライセンス**: Apache-2.0
+- **URL**: https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2
+- **商用利用**: 可能
+- **用途**: 英語埋め込み・類似度計算
+- **サイズ**: 91MB
+
+### sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
+- **ライセンス**: Apache-2.0
+- **URL**: https://huggingface.co/sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
+- **商用利用**: 可能
+- **用途**: 多言語埋め込み・類似度計算
+- **サイズ**: 471MB
+- **対応言語**: en, ja, zh, ko, de, fr, es
+
+### sentence-transformers/all-mpnet-base-v2
+- **ライセンス**: Apache-2.0
+- **URL**: https://huggingface.co/sentence-transformers/all-mpnet-base-v2
+- **商用利用**: 可能
+- **用途**: 高精度英語埋め込み・類似度計算
+- **サイズ**: 420MB
+
+### sentence-transformers/paraphrase-multilingual-mpnet-base-v2
+- **ライセンス**: Apache-2.0
+- **URL**: https://huggingface.co/sentence-transformers/paraphrase-multilingual-mpnet-base-v2
+- **商用利用**: 可能
+- **用途**: 高精度多言語埋め込み・類似度計算
+- **サイズ**: 420MB
+- **対応言語**: en, ja, zh, ko, de, fr, es
+
+### pkshatech/GLuCoSE-base-ja
+- **ライセンス**: Apache-2.0
+- **URL**: https://huggingface.co/pkshatech/GLuCoSE-base-ja
+- **商用利用**: 可能
+- **用途**: 日本語特化埋め込み・類似度計算
+- **サイズ**: 420MB
+- **対応言語**: ja
+
+## 外部API
+
+### Hugging Face API
+- **利用規約**: https://huggingface.co/terms-of-use
+- **商用利用**: 条件付き（利用規約の遵守が必要）
+- **制限**: レート制限、利用規約の遵守
+
+## ライセンス表示義務
+
+本プロジェクトを使用する際は、以下のライセンス情報を表示する必要があります：
+
+### 必須表示
+1. **プロジェクトライセンス**: MIT License - Copyright (c) 2025 Tag Manager Project
+2. **主要ライブラリ**: ttkbootstrap (MIT), transformers (Apache-2.0), torch (BSD-3-Clause)
+3. **使用モデル**: sentence-transformers/all-MiniLM-L6-v2 (Apache-2.0) 等
+
+### 表示方法
+- アプリケーション内のヘルプメニュー
+- README.md ファイル
+- 配布物への同梱
+
+## 免責事項
+
+- 各ライブラリ・モデルのライセンスは変更される可能性があります
+- 商用利用前は最新のライセンス情報を確認してください
+- 法的責任は利用者にあります
+
+---
+
+**最終更新**: 2025-07-28  
+**バージョン**: 1.0.0 

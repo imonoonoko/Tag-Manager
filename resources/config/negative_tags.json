@@ -1,0 +1,116 @@
+[
+  {
+    "tag": "civit_nsfw",
+    "jp": "civit_nsfw",
+    "favorite": false,
+    "category": "ネガティブ"
+  },
+  {
+    "tag": "lowres",
+    "jp": "ローレス",
+    "favorite": false,
+    "category": "ネガティブ"
+  },
+  {
+    "tag": "bad anatomy",
+    "jp": "悪い解剖学",
+    "favorite": false,
+    "category": "ネガティブ"
+  },
+  {
+    "tag": "bad hands",
+    "jp": "悪い手",
+    "favorite": false,
+    "category": "ネガティブ"
+  },
+  {
+    "tag": "text",
+    "jp": "文章",
+    "favorite": false,
+    "category": "ネガティブ"
+  },
+  {
+    "tag": "error",
+    "jp": "エラー",
+    "favorite": false,
+    "category": "ネガティブ"
+  },
+  {
+    "tag": "missing fingers",
+    "jp": "指がありません",
+    "favorite": false,
+    "category": "ネガティブ"
+  },
+  {
+    "tag": "extra digit",
+    "jp": "余分な数字",
+    "favorite": false,
+    "category": "ネガティブ"
+  },
+  {
+    "tag": "fewer digits",
+    "jp": "数桁が少ない",
+    "favorite": false,
+    "category": "ネガティブ"
+  },
+  {
+    "tag": "cropped",
+    "jp": "クロップド",
+    "favorite": false,
+    "category": "ネガティブ"
+  },
+  {
+    "tag": "worst quality",
+    "jp": "最悪の品質",
+    "favorite": false,
+    "category": "ネガティブ"
+  },
+  {
+    "tag": "low quality",
+    "jp": "低品質",
+    "favorite": false,
+    "category": "ネガティブ"
+  },
+  {
+    "tag": "low score",
+    "jp": "低スコア",
+    "favorite": false,
+    "category": "ネガティブ"
+  },
+  {
+    "tag": "bad score",
+    "jp": "悪いスコア",
+    "favorite": false,
+    "category": "ネガティブ"
+  },
+  {
+    "tag": "average score",
+    "jp": "平均スコア",
+    "favorite": false,
+    "category": "ネガティブ"
+  },
+  {
+    "tag": "signature",
+    "jp": "サイン",
+    "favorite": false,
+    "category": "ネガティブ"
+  },
+  {
+    "tag": "watermark",
+    "jp": "透かし",
+    "favorite": false,
+    "category": "ネガティブ"
+  },
+  {
+    "tag": "username",
+    "jp": "ユーザー名",
+    "favorite": false,
+    "category": "ネガティブ"
+  },
+  {
+    "tag": "nipples",
+    "jp": "乳首",
+    "favorite": false,
+    "category": "ネガティブ"
+  }
+]
