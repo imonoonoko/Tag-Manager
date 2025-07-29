@@ -40,7 +40,7 @@ except ImportError as e:
     logging.warning(f"Hugging Face Transformersがインストールされていません。ローカルAI機能は無効です。エラー: {e}")
     print(f"Local Hugging Face依存関係の読み込みに失敗: {e}")
 
-from modules.config import BACKUP_DIR
+from modules.config import BACKUP_DIR, APP_ROOT
 
 # 商用利用可能なモデル設定
 COMMERCIAL_MODELS = {
@@ -78,8 +78,8 @@ COMMERCIAL_MODELS = {
     }
 }
 
-# キャッシュ設定
-CACHE_DIR = os.path.join(BACKUP_DIR, "local_hf_cache")
+# キャッシュ設定（絶対パス）
+CACHE_DIR = os.path.join(APP_ROOT, "local_hf_cache")
 MODEL_CACHE_DIR = os.path.join(CACHE_DIR, "models")
 EMBEDDING_CACHE_FILE = os.path.join(CACHE_DIR, "embeddings_cache.json")
 SIMILARITY_CACHE_FILE = os.path.join(CACHE_DIR, "similarity_cache.json")
@@ -132,6 +132,7 @@ class LocalHuggingFaceManager:
         # HF_AVAILABLEの状態を確認
         if not HF_AVAILABLE:
             self.logger.warning("Hugging Face Transformersが利用できません")
+            print("Hugging Face Transformersが利用できません")
             self.model_name = None
             self.use_gpu = False
             self.device = "cpu"
@@ -171,25 +172,21 @@ class LocalHuggingFaceManager:
             self._load_error = None
             self._load_thread = None
             
+            # キャッシュディレクトリを確実に作成
             self._ensure_cache_directories()
+            
+            # キャッシュを読み込み
             self._load_caches()
             
-            # AI設定を確認して軽量埋め込み生成モードをチェック
-            ai_settings = self._load_ai_settings()
-            if ai_settings.get('use_lightweight_embeddings', True):
-                print("Local HF: 軽量埋め込み生成モードを有効化")
-                self._use_lightweight_embeddings = True
-                self._loaded = True  # 軽量モードでは即座に利用可能
-                self.logger.info("Local HF: 軽量埋め込み生成モードで初期化完了")
-                return
-            
-            # モデル読み込みを非同期で開始
+            # 非同期でモデルを読み込み
             self._start_async_load()
             
+            print(f"ローカルAIマネージャーを初期化しました: {model_name}")
+            
         except Exception as e:
-            self.logger.error(f"Local HuggingFace Manager初期化エラー: {e}")
+            self.logger.error(f"ローカルAIマネージャーの初期化エラー: {e}")
+            print(f"ローカルAIマネージャーの初期化エラー: {e}")
             self._load_error = e
-            print(f"Local HuggingFace Manager初期化エラー: {e}")
     
     def _start_async_load(self):
         """モデル読み込みを非同期で開始"""
@@ -197,58 +194,78 @@ class LocalHuggingFaceManager:
             return
         
         self._loading = True
-        self._load_error = None
-        
-        def load_worker():
-            try:
-                self._load_model()
-                self._loaded = True
-                self.logger.info("モデル読み込み完了（非同期）")
-            except Exception as e:
-                self._load_error = e
-                self.logger.error(f"モデル読み込みエラー（非同期）: {e}")
-            finally:
-                self._loading = False
-        
-        self._load_thread = threading.Thread(target=load_worker, daemon=True)
+        self._load_thread = threading.Thread(target=self._load_worker, daemon=True)
         self._load_thread.start()
+        
+        print("ローカルAIモデルの非同期読み込みを開始しました")
+
+    def _load_worker(self):
+        """非同期読み込みワーカー"""
+        try:
+            self._load_model()
+            self._loaded = True
+            print("ローカルAIモデルの非同期読み込みが完了しました")
+        except Exception as e:
+            self._load_error = e
+            print(f"ローカルAIモデルの非同期読み込みに失敗: {e}")
+        finally:
+            self._loading = False
     
     def is_ready(self) -> bool:
         """モデルが読み込み完了しているかどうかを確認"""
-        # 軽量埋め込み生成モードの場合は常に利用可能
-        if hasattr(self, '_use_lightweight_embeddings') and self._use_lightweight_embeddings:
-            return True
-        return self._loaded and self.embedding_model is not None
+        ready = self._loaded and self.embedding_model is not None
+        if ready:
+            print("ローカルAIモデルが準備完了です")
+        else:
+            print("ローカルAIモデルがまだ準備中です")
+        return ready
     
     def is_loading(self) -> bool:
         """モデルが読み込み中かどうかを確認"""
-        return self._loading
+        loading = self._loading
+        if loading:
+            print("ローカルAIモデルが読み込み中です")
+        return loading
     
     def get_load_error(self) -> Optional[Exception]:
         """読み込みエラーを取得"""
+        if self._load_error:
+            print(f"ローカルAIモデルの読み込みエラー: {self._load_error}")
         return self._load_error
     
     def wait_for_load(self, timeout: float = 120.0) -> bool:
-        """
-        モデル読み込み完了を待機（タイムアウト時間を延長）
-        デフォルト: 120秒（2分）
-        """
+        """モデル読み込み完了まで待機"""
+        if self.is_ready():
+            return True
+        
         if self._load_thread and self._load_thread.is_alive():
-            self.logger.info(f"モデル読み込み完了を待機中... (タイムアウト: {timeout}秒)")
+            print(f"ローカルAIモデルの読み込み完了まで最大{timeout}秒待機します...")
             self._load_thread.join(timeout=timeout)
-            
-            if self._load_thread.is_alive():
-                self.logger.warning(f"モデル読み込みがタイムアウトしました ({timeout}秒)")
-                return False
-            else:
-                self.logger.info("モデル読み込み完了を確認しました")
-                return self.is_ready()
-        return self.is_ready()
+        
+        if self.is_ready():
+            print("ローカルAIモデルの読み込みが完了しました")
+            return True
+        else:
+            print("ローカルAIモデルの読み込みがタイムアウトしました")
+            return False
     
     def _ensure_cache_directories(self):
-        """キャッシュディレクトリを作成"""
-        os.makedirs(CACHE_DIR, exist_ok=True)
-        os.makedirs(MODEL_CACHE_DIR, exist_ok=True)
+        """キャッシュディレクトリを確実に作成"""
+        try:
+            # メインキャッシュディレクトリ
+            if not os.path.exists(CACHE_DIR):
+                os.makedirs(CACHE_DIR, exist_ok=True)
+                print(f"ローカルAIキャッシュディレクトリを作成: {CACHE_DIR}")
+            
+            # モデルキャッシュディレクトリ
+            if not os.path.exists(MODEL_CACHE_DIR):
+                os.makedirs(MODEL_CACHE_DIR, exist_ok=True)
+                print(f"ローカルAIモデルキャッシュディレクトリを作成: {MODEL_CACHE_DIR}")
+                
+        except Exception as e:
+            self.logger.error(f"キャッシュディレクトリの作成に失敗: {e}")
+            print(f"ローカルAIキャッシュディレクトリの作成に失敗: {e}")
+            raise
     
     def _load_caches(self):
         """キャッシュファイルを読み込み"""
@@ -257,39 +274,41 @@ class LocalHuggingFaceManager:
             if os.path.exists(EMBEDDING_CACHE_FILE):
                 with open(EMBEDDING_CACHE_FILE, 'r', encoding='utf-8') as f:
                     cache_data = json.load(f)
-                    current_time = time.time()
                     
-                    for tag, data in cache_data.items():
-                        if current_time < data.get('expires_at', 0):
-                            self.embedding_cache[tag] = CachedEmbedding(
-                                tag=data['tag'],
-                                embedding=data['embedding'],
-                                model_name=data['model_name'],
-                                created_at=data['created_at'],
-                                expires_at=data['expires_at']
-                            )
-                    
-                    self.logger.info(f"埋め込みキャッシュを読み込み: {len(self.embedding_cache)}タグ")
+                for tag, data in cache_data.items():
+                    # 有効期限をチェック
+                    expires_at = datetime.fromisoformat(data['expires_at'])
+                    if datetime.now() < expires_at:
+                        self.embedding_cache[tag] = CachedEmbedding(
+                            tag=data['tag'],
+                            embedding=data['embedding'],
+                            model_name=data['model_name'],
+                            created_at=data['created_at'],
+                            expires_at=data['expires_at']
+                        )
+                
+                print(f"埋め込みキャッシュを読み込み: {len(self.embedding_cache)}件")
             
             # 類似度キャッシュ
             if os.path.exists(SIMILARITY_CACHE_FILE):
                 with open(SIMILARITY_CACHE_FILE, 'r', encoding='utf-8') as f:
                     cache_data = json.load(f)
-                    current_time = time.time()
                     
-                    for key, data in cache_data.items():
-                        if current_time < data.get('expires_at', 0):
-                            self.similarity_cache[key] = CachedSimilarity(
-                                tag1=data['tag1'],
-                                tag2=data['tag2'],
-                                similarity=data['similarity'],
-                                model_name=data['model_name'],
-                                method=data['method'],
-                                created_at=data['created_at'],
-                                expires_at=data['expires_at']
-                            )
-                    
-                    self.logger.info(f"類似度キャッシュを読み込み: {len(self.similarity_cache)}ペア")
+                for key, data in cache_data.items():
+                    # 有効期限をチェック
+                    expires_at = datetime.fromisoformat(data['expires_at'])
+                    if datetime.now() < expires_at:
+                        self.similarity_cache[key] = CachedSimilarity(
+                            tag1=data['tag1'],
+                            tag2=data['tag2'],
+                            similarity=data['similarity'],
+                            model_name=data['model_name'],
+                            method=data['method'],
+                            created_at=data['created_at'],
+                            expires_at=data['expires_at']
+                        )
+                
+                print(f"類似度キャッシュを読み込み: {len(self.similarity_cache)}ペア")
             
             # モデルメタデータ
             if os.path.exists(MODEL_METADATA_FILE):
@@ -298,6 +317,7 @@ class LocalHuggingFaceManager:
                     
         except Exception as e:
             self.logger.error(f"キャッシュ読み込みエラー: {e}")
+            print(f"ローカルAIキャッシュ読み込みエラー: {e}")
     
     def _save_caches(self):
         """キャッシュファイルを保存"""
@@ -337,132 +357,102 @@ class LocalHuggingFaceManager:
                 with open(MODEL_METADATA_FILE, 'w', encoding='utf-8') as f:
                     json.dump(self.model_metadata, f, ensure_ascii=False, indent=2)
                 
-                self.logger.info("キャッシュを保存しました")
+                print("ローカルAIキャッシュを保存しました")
                 
         except Exception as e:
             self.logger.error(f"キャッシュ保存エラー: {e}")
+            print(f"ローカルAIキャッシュ保存エラー: {e}")
     
     def _load_model(self):
-        """商用利用可能なモデルを読み込み（リトライ機能付き）"""
-        max_retries = 3
-        retry_count = 0
-        
-        # AI設定を読み込み
-        ai_settings = self._load_ai_settings()
-        force_cpu = ai_settings.get('force_cpu', True)
-        skip_device_assignment = ai_settings.get('skip_model_device_assignment', True)
-        use_cpu_only_init = ai_settings.get('use_cpu_only_initialization', True)
-        
-        # CPU強制設定の確認
-        if force_cpu or use_cpu_only_init:
-            self.device = "cpu"
-            self.use_gpu = False
-            print(f"Local HF: CPU強制設定により、デバイスをCPUに設定: {self.device}")
-        
-        while retry_count < max_retries:
-            try:
-                if self.model_name not in COMMERCIAL_MODELS:
-                    self.logger.error(f"不明なモデル: {self.model_name}")
-                    return
-                
-                model_info = COMMERCIAL_MODELS[self.model_name]
-                self.logger.info(f"商用利用可能なモデルを読み込み中: {model_info['name']} (試行 {retry_count + 1}/{max_retries})")
-                self.logger.info(f"ライセンス: {model_info['license']}")
-                self.logger.info(f"商用利用: {model_info['commercial_use']}")
-                self.logger.info(f"モデルサイズ: {model_info['size_mb']}MB")
-                
-                # モデルをローカルにダウンロード（初回のみ）
-                model_path = os.path.join(MODEL_CACHE_DIR, self.model_name)
-                if not os.path.exists(model_path):
-                    self.logger.info(f"モデルをダウンロード中: {model_info['name']}")
-                    os.makedirs(model_path, exist_ok=True)
-                else:
-                    self.logger.info(f"キャッシュされたモデルを使用: {model_path}")
-                
-                # SentenceTransformerモデルの読み込み（複数の方法を試行）
-                self.logger.info("SentenceTransformerモデルを初期化中...")
-                
-                # 方法1: 通常の読み込み
-                try:
-                    if skip_device_assignment:
-                        self.embedding_model = SentenceTransformer(
-                            model_info['name'], 
-                            cache_folder=model_path
-                        )
-                        print("Local HF: SentenceTransformerをデバイス指定なしで読み込み完了")
-                    else:
-                        self.embedding_model = SentenceTransformer(
-                            model_info['name'], 
-                            device=self.device,
-                            cache_folder=model_path
-                        )
-                        print(f"Local HF: SentenceTransformerをデバイス {self.device} で読み込み完了")
-                except Exception as e1:
-                    print(f"Local HF: SentenceTransformer読み込みエラー (方法1): {e1}")
-                    
-                    # 方法2: メタテンソルエラーの回避
-                    try:
-                        if "meta tensor" in str(e1).lower():
-                            print("Local HF: メタテンソルエラーを検出。CPU専用初期化を試行...")
-                            self.embedding_model = SentenceTransformer(
-                                model_info['name'], 
-                                cache_folder=model_path
-                            )
-                            print("Local HF: SentenceTransformerをCPU専用で読み込み完了")
-                        else:
-                            raise e1
-                    except Exception as e2:
-                        print(f"Local HF: SentenceTransformer読み込みエラー (方法2): {e2}")
-                        
-                        # 方法3: 最後の手段 - デバイス指定を完全に削除
-                        try:
-                            print("Local HF: 最終手段: デバイス指定を完全に削除して読み込み...")
-                            self.embedding_model = SentenceTransformer(
-                                model_info['name'], 
-                                cache_folder=model_path
-                            )
-                            print("Local HF: SentenceTransformerを最終手段で読み込み完了")
-                        except Exception as e3:
-                            print(f"Local HF: SentenceTransformer読み込みエラー (方法3): {e3}")
-                            raise e3
-                
-                # モデルの動作確認
-                self.logger.info("モデルの動作確認中...")
-                test_embedding = self.embedding_model.encode(["test"], convert_to_numpy=True)
-                if test_embedding is not None and len(test_embedding) > 0:
-                    self.logger.info("モデルの動作確認が完了しました")
-                else:
-                    raise Exception("モデルの動作確認に失敗しました")
-                
-                # メタデータを更新
-                self.model_metadata[self.model_name] = {
-                    'name': model_info['name'],
-                    'license': model_info['license'],
-                    'commercial_use': model_info['commercial_use'],
-                    'description': model_info['description'],
-                    'size_mb': model_info['size_mb'],
-                    'languages': model_info['languages'],
-                    'downloaded_at': datetime.now().isoformat(),
-                    'last_used': datetime.now().isoformat(),
-                    'cache_size': len(self.embedding_cache)
-                }
-                
-                self.logger.info(f"モデル読み込み完了: {model_info['name']}")
-                return  # 成功したらループを抜ける
-                
-            except Exception as e:
-                retry_count += 1
-                self.logger.error(f"モデル読み込みエラー (試行 {retry_count}/{max_retries}): {e}")
-                
-                if retry_count < max_retries:
-                    wait_time = retry_count * 5  # 5秒、10秒、15秒と待機時間を増加
-                    self.logger.info(f"{wait_time}秒後にリトライします...")
-                    time.sleep(wait_time)
-                else:
-                    self.logger.error(f"モデル読み込みが{max_retries}回失敗しました。最後のエラー: {e}")
-                    self._load_error = e
-                    self.embedding_model = None
+        """モデルを読み込み"""
+        try:
+            print(f"モデル '{self.model_name}' を読み込み中...")
+            
+            # モデル情報を取得
+            model_info = COMMERCIAL_MODELS.get(self.model_name)
+            if not model_info:
+                raise ValueError(f"不明なモデル名: {self.model_name}")
+            
+            # Hugging Faceのキャッシュディレクトリを設定
+            cache_dir = os.path.join(MODEL_CACHE_DIR, self.model_name.replace("/", "_"))
+            os.makedirs(cache_dir, exist_ok=True)
+            
+            # 環境変数でキャッシュディレクトリを設定
+            os.environ['HF_HOME'] = cache_dir
+            os.environ['TRANSFORMERS_CACHE'] = cache_dir
+            
+            # モデルとトークナイザーを読み込み
+            model_name = model_info["name"]
+            
+            # モデルが既に存在するかチェック
+            model_exists = os.path.exists(cache_dir) and any(
+                os.path.exists(os.path.join(cache_dir, f)) 
+                for f in os.listdir(cache_dir) 
+                if f.endswith('.bin') or f.endswith('.safetensors')
+            )
+            
+            if model_exists:
+                print(f"キャッシュされたモデル '{model_name}' を使用します")
+                local_files_only = True
+            else:
+                print(f"モデル '{model_name}' をダウンロード中...")
+                local_files_only = False
+            
+            # キャッシュディレクトリを指定してモデルを読み込み
+            self.tokenizer = AutoTokenizer.from_pretrained(
+                model_name, 
+                cache_dir=cache_dir,
+                local_files_only=local_files_only
+            )
+            
+            self.model = AutoModel.from_pretrained(
+                model_name, 
+                cache_dir=cache_dir,
+                local_files_only=local_files_only
+            )
+            
+            # SentenceTransformerモデルを作成
+            self.embedding_model = SentenceTransformer(model_name, cache_folder=cache_dir)
+            
+            # デバイスに移動
+            self.model.to(self.device)
+            self.embedding_model.to(self.device)
+            
+            # モデルメタデータを更新
+            self._update_model_metadata(model_info)
+            
+            print(f"モデル '{self.model_name}' の読み込みが完了しました")
+            
+        except Exception as e:
+            self.logger.error(f"モデル読み込みエラー: {e}")
+            print(f"モデル読み込みエラー: {e}")
+            self._load_error = e
+            raise
     
+    def _update_model_metadata(self, model_info: Dict[str, Any]):
+        """モデルメタデータを更新"""
+        try:
+            self.model_metadata[self.model_name] = {
+                'name': model_info['name'],
+                'license': model_info['license'],
+                'commercial_use': model_info['commercial_use'],
+                'description': model_info['description'],
+                'size_mb': model_info['size_mb'],
+                'languages': model_info['languages'],
+                'downloaded_at': datetime.now().isoformat(),
+                'last_used': datetime.now().isoformat(),
+                'cache_size': len(self.embedding_cache)
+            }
+            
+            # メタデータをファイルに保存
+            self._save_caches()
+            
+            print(f"モデルメタデータを更新しました: {self.model_name}")
+            
+        except Exception as e:
+            self.logger.error(f"モデルメタデータの更新に失敗: {e}")
+            print(f"モデルメタデータの更新に失敗: {e}")
+
     def _load_ai_settings(self) -> dict:
         """AI設定ファイルを読み込み"""
         try:
@@ -783,15 +773,29 @@ class LocalHuggingFaceManager:
         return similarities[:limit]
     
     def cleanup(self):
-        """リソースのクリーンアップ"""
-        self._save_caches()
-        
-        if hasattr(self, 'model') and self.model:
-            del self.model
-        if hasattr(self, 'tokenizer') and self.tokenizer:
-            del self.tokenizer
-        if hasattr(self, 'embedding_model') and self.embedding_model:
-            del self.embedding_model
+        """リソースをクリーンアップ"""
+        try:
+            # キャッシュを保存
+            self._save_caches()
+            
+            # モデルをクリア
+            if hasattr(self, 'model') and self.model is not None:
+                del self.model
+                self.model = None
+            
+            if hasattr(self, 'tokenizer') and self.tokenizer is not None:
+                del self.tokenizer
+                self.tokenizer = None
+            
+            if hasattr(self, 'embedding_model') and self.embedding_model is not None:
+                del self.embedding_model
+                self.embedding_model = None
+            
+            print("ローカルAIリソースをクリーンアップしました")
+            
+        except Exception as e:
+            self.logger.error(f"クリーンアップエラー: {e}")
+            print(f"ローカルAIクリーンアップエラー: {e}")
 
 # グローバルインスタンス
 local_hf_manager = LocalHuggingFaceManager() 
