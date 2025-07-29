@@ -76,8 +76,8 @@ class TagManagerApp:
         self.root = root
         self.theme_manager = ThemeManager()
         # 絶対パスでデータベースファイルを指定
-        import os
-        db_path = db_file or os.path.join(os.path.dirname(__file__), '..', 'data', 'tags.db')
+        from modules.config import DB_FILE
+        db_path = db_file or DB_FILE
         self.tag_manager = TagManager(db_file=db_path, parent=self.root)
         # キャッシュを無効化してデータを再読み込み
         self.tag_manager.invalidate_cache()
@@ -597,9 +597,21 @@ class TagManagerApp:
         # --- 既存のon_output_focus_outはそのまま維持 ---
 
     def on_closing(self) -> None:
-        if messagebox.askokcancel("終了", "アプリケーションを終了しますか？"):
-            self.tag_manager.close()
-            self.root.destroy()
+        """アプリケーション終了時の処理"""
+        try:
+            # データベースを確実に保存
+            if hasattr(self, 'tag_manager') and self.tag_manager:
+                self.tag_manager.close()
+            
+            # ルートウィンドウを破棄
+            if hasattr(self, 'root') and self.root:
+                self.root.destroy()
+                
+        except Exception as e:
+            print(f"アプリケーション終了時のエラー: {e}")
+            # エラーが発生しても強制終了
+            if hasattr(self, 'root') and self.root:
+                self.root.destroy()
 
     def update_category_description(self) -> None:
         description = self.category_descriptions.get(self.current_category, "説明はありません。")

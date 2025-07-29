@@ -3,33 +3,47 @@
 """
 import os
 from typing import Dict, List
+import sys # 追加: sysモジュールをインポート
 
 # 基本設定
 APP_NAME = "Tag Manager"
 VERSION = "1.0.0"
 
-# ファイルパス設定
-DB_FILE = os.path.join('data', "tags.db")
-THEME_FILE = os.path.join('resources', 'config', 'theme_settings.json')
-CATEGORY_KEYWORDS_FILE = os.path.join('resources', 'config', 'category_keywords.json')
-CATEGORY_DESCRIPTIONS_FILE = os.path.join('resources', 'config', 'category_descriptions.json')
+# アプリケーションのルートディレクトリを取得
+def get_app_root():
+    """アプリケーションのルートディレクトリを取得（EXE対応）"""
+    if getattr(sys, 'frozen', False):
+        # PyInstallerで作成されたEXEの場合
+        return os.path.dirname(sys.executable)
+    else:
+        # 通常のPythonスクリプトの場合
+        return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+# アプリケーションルートディレクトリ
+APP_ROOT = get_app_root()
+
+# ファイルパス設定（絶対パス）
+DB_FILE = os.path.join(APP_ROOT, 'data', "tags.db")
+THEME_FILE = os.path.join(APP_ROOT, 'resources', 'config', 'theme_settings.json')
+CATEGORY_KEYWORDS_FILE = os.path.join(APP_ROOT, 'resources', 'config', 'category_keywords.json')
+CATEGORY_DESCRIPTIONS_FILE = os.path.join(APP_ROOT, 'resources', 'config', 'category_descriptions.json')
 
 # 後方互換性のための設定
-POSITIVE_PROMPT_FILE = os.path.join('resources', 'config', "translated_tags.json")
-NEGATIVE_PROMPT_FILE = os.path.join('resources', 'config', "negative_tags.json")
+POSITIVE_PROMPT_FILE = os.path.join(APP_ROOT, 'resources', 'config', "translated_tags.json")
+NEGATIVE_PROMPT_FILE = os.path.join(APP_ROOT, 'resources', 'config', "negative_tags.json")
 TRANSLATING_PLACEHOLDER = "翻訳中..."
 
 # バックアップ設定
-BACKUP_DIR = 'backup'
+BACKUP_DIR = os.path.join(APP_ROOT, 'backup')
 BACKUP_PREFIX = 'tags_backup_'
 
 # ログ設定
-LOG_DIR = 'logs'
+LOG_DIR = os.path.join(APP_ROOT, 'logs')
 LOG_FILE = os.path.join(LOG_DIR, 'app.log')
 LOG_LEVEL = 'INFO'
 
 # テスト設定
-TEST_DB_FILE = os.path.join('backup', 'test', 'test_tags.db')
+TEST_DB_FILE = os.path.join(BACKUP_DIR, 'test', 'test_tags.db')
 
 # 基本設定値
 DEFAULT_THEME = "darkly"
@@ -39,7 +53,7 @@ DEFAULT_WEIGHT = 1.0
 # ログ設定
 LOG_LEVEL = "INFO"
 LOG_FORMAT = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
-LOG_FILE = os.path.join('logs', 'app.log')
+LOG_FILE = os.path.join(LOG_DIR, 'app.log')
 
 # データベース設定
 CACHE_TIMEOUT = 300  # 5分
