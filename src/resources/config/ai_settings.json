@@ -1,0 +1,11 @@
+{
+  "use_gpu": false,
+  "use_lightweight_embeddings": true,
+  "force_cpu": true,
+  "skip_model_device_assignment": true,
+  "use_cpu_only_initialization": true,
+  "models_downloaded": false,
+  "skip_download": false,
+  "download_completed": false,
+  "first_run": true
+}

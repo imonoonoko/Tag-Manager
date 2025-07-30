@@ -41,9 +41,13 @@ if errorlevel 1 (
     exit /b 1
 )
 
-rem Run the application
+rem Set PYTHONPATH to include the src directory
+set "PYTHONPATH=%~dp0src;!PYTHONPATH!"
+
+rem Run the application from src directory
 echo Starting the application...
-"!PYTHON_EXE!" -X utf8 "%~dp0main.py"
+cd "%~dp0src"
+"!PYTHON_EXE!" -X utf8 "%~dp0src\main.py"
 
 endlocal
 echo Application closed.

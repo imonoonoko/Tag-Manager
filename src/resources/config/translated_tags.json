@@ -1,0 +1,14 @@
+[
+  {
+    "tag": "sample_tag",
+    "jp": "サンプルタグ",
+    "favorite": false,
+    "category": "サンプル"
+  },
+  {
+    "tag": "example_tag",
+    "jp": "例タグ",
+    "favorite": false,
+    "category": "サンプル"
+  }
+]

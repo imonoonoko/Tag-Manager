@@ -1,0 +1,12 @@
+{
+  "use_gpu": false,
+  "use_lightweight_embeddings": true,
+  "force_cpu": true,
+  "skip_model_device_assignment": true,
+  "use_cpu_only_initialization": true,
+  "models_downloaded": true,
+  "skip_download": false,
+  "download_completed": true,
+  "last_download_check": "2025-07-30T21:11:51.612168",
+  "download_date": "2025-07-30T21:11:51.612168"
+}
